@@ -1,0 +1,37 @@
+# Terraform
+*.tfstate
+*.tfstate.*
+.terraform/
+.terraform.lock.hcl
+*.tfvars          # peut contenir des secrets — un exemple est fourni en .tfvars.example
+
+# Données
+*.csv
+*.zip
+*.parquet
+data/
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.ipynb_checkpoints/
+
+# Airflow (exécution locale)
+airflow/logs/
+airflow/*.db
+airflow/*.pid
+logs/
+
+# Secrets
+.env
+*.pem
+*.key
+secrets/
+
+# IDE / OS
+.vscode/
+.idea/
+Thumbs.db
+.DS_Store
