@@ -55,6 +55,38 @@ multi-pods) partagent les mêmes briques logicielles et le même code. Le
 dimensionnement est une variable d'entrée, pas une réécriture — voir
 `docs/decisions.md`.
 
+## Installation (poste de développement)
+
+Environnement virtuel dédié obligatoire — jamais le Python global ni Anaconda
+(voir décision D-103 dans [`docs/decisions.md`](docs/decisions.md)) :
+
+```powershell
+python -m venv .venv
+.venv\Scripts\activate                  # le prompt doit afficher (.venv)
+python -m pip install -r requirements.txt
+```
+
+Vérification (le test échoue si Anaconda ou le Python global est actif) :
+
+```powershell
+pytest tests\test_environment.py -q
+```
+
+Airflow et Spark ne s'installent pas dans ce venv : ils tournent en conteneurs
+(`docker/`), ce qui évite les incompatibilités Windows et garantit que le poste
+exécute exactement les mêmes images que l'infrastructure déployée.
+
+Deux fichiers de dépendances, aux rôles distincts :
+
+| Fichier | Rôle |
+|---|---|
+| `requirements.txt` | Contraintes minimales lisibles (`fastapi>=0.115`) — ce qu'on installe |
+| `requirements.lock.txt` | Versions exactes constatées (`pip freeze`) — repris tel quel par les images Docker pour garantir l'identité poste/production |
+
+Le dossier `.venv/` n'est **jamais** versionné (lourd, propre à la machine,
+régénérable) ; les deux fichiers de dépendances le sont **toujours** — ce sont
+eux qui permettent de le reconstruire à l'identique.
+
 ## Conformité
 
 - Chiffrement au repos (SSE/KMS) et en transit (TLS), IAM par rôles, secrets gérés.

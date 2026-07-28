@@ -25,3 +25,16 @@
 - **Raison :** infrastructure, pipeline et déploiement partagent le même cycle de
   vie opérationnel ; deux dépôts au total restent simples à présenter au jury,
   chaque bloc pointant vers un dossier précis.
+
+## D-103 — 28/07/2026 — Environnement virtuel dédié, et conteneurs pour Airflow/Spark
+
+- **Contexte :** poste Windows avec plusieurs Python installés ; Airflow ne
+  supporte pas nativement Windows et Spark y demande une configuration lourde.
+- **Options :** tout installer sur le poste ; WSL ; venv pour le code applicatif
+  + conteneurs pour les moteurs.
+- **Choix :** un `.venv` par dépôt pour le code applicatif (API, tests, outillage)
+  alimenté par `requirements.txt` ; Airflow, Spark et PostgreSQL exclusivement en
+  conteneurs (`docker/`).
+- **Raison :** le poste exécute alors les mêmes images que l'infrastructure
+  déployée — la démonstration au jury n'est pas un montage local mais l'exécution
+  réelle des artefacts livrés. Les dépendances restent isolées et reproductibles.

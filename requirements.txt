@@ -1,0 +1,28 @@
+# Dépendances du poste de développement pour ce dépôt.
+# Airflow et Spark ne sont PAS installés ici : ils tournent en conteneurs
+# (docker-compose), ce qui évite les incompatibilités Windows et garantit
+# l'identité entre le poste et l'infrastructure déployée.
+
+# API de scoring
+fastapi>=0.115
+uvicorn[standard]>=0.30
+pydantic>=2.8
+
+# Chargement du modèle et explicabilité côté service
+lightgbm>=4.3
+shap>=0.46
+pandas>=2.2
+numpy>=1.26
+
+# Feature store
+psycopg[binary]>=3.2
+sqlalchemy>=2.0
+
+# Monitoring et dérive
+prometheus-client>=0.20
+evidently>=0.4
+
+# Qualité et tests
+pytest>=8.0
+httpx>=0.27
+ruff>=0.5
