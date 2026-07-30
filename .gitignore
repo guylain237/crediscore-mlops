@@ -1,9 +1,30 @@
 # Terraform
+# ATTENTION : un .gitignore n'accepte PAS de commentaire en fin de ligne.
+# Tout ce qui suit le motif ferait partie du motif — et ne filtrerait plus rien.
+# Les commentaires vont donc systématiquement sur leur propre ligne.
+
+# État de l'infrastructure : sensible, et stocké dans S3 (voir infra/backend.tf)
 *.tfstate
 *.tfstate.*
+
+# Cache des providers téléchargés — régénéré par `terraform init`
 .terraform/
-.terraform.lock.hcl
-*.tfvars          # peut contenir des secrets — un exemple est fourni en .tfvars.example
+
+# Peut contenir des secrets ; un gabarit est fourni en .tfvars.example
+*.tfvars
+
+# Contient le numéro de compte AWS ; gabarit en backend.hcl.example
+backend.hcl
+
+# Plans enregistrés par `terraform plan -out=tfplan` : valeurs sensibles,
+# non rejouables ailleurs
+tfplan
+*.tfplan
+
+# .terraform.lock.hcl est VOLONTAIREMENT versionné : il fige les versions et
+# empreintes exactes des providers, exactement comme requirements.lock.txt le
+# fait pour Python. L'ignorer, c'est perdre la reproductibilité que l'on exige
+# par ailleurs du côté Python.
 
 # Données
 *.csv

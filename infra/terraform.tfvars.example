@@ -1,0 +1,13 @@
+# Gabarit des variables d'entrée.
+#
+# Copier en `terraform.tfvars` (non versionné — voir .gitignore) pour surcharger
+# les valeurs par défaut définies dans variables.tf. Sans ce fichier, les
+# défauts s'appliquent et l'infrastructure se déploie correctement : il n'est
+# donc utile que pour dévier de la configuration nominale.
+
+region        = "eu-north-1"
+nom_projet    = "crediscore"
+environnement = "demonstrateur" # ou "cible" — voir décision D-101
+
+# Rétention des anciennes versions d'objets, en jours.
+jours_conservation_versions = 30

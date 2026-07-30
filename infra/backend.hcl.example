@@ -1,0 +1,13 @@
+# Gabarit de la configuration partielle du backend S3.
+#
+# Copier en `backend.hcl` (non versionné : il contient le numéro de compte AWS)
+# puis initialiser :
+#
+#     terraform init -backend-config=backend.hcl
+#
+# Le bucket est celui créé à la main à l'étape 6 de docs/connexion-aws.md.
+# Récupérer son nom exact :
+#
+#     aws s3 ls | Select-String tfstate
+#
+bucket = "crediscore-tfstate-VOTRE_NUMERO_DE_COMPTE"
