@@ -27,10 +27,12 @@ tfplan
 # par ailleurs du côté Python.
 
 # Données
+# La barre oblique initiale ANCRE le motif à la racine : sans elle, « data/ »
+# ignorerait aussi un futur pipelines/data/ ou api/data/, qui sont du code.
 *.csv
 *.zip
 *.parquet
-data/
+/data/
 
 # Python
 __pycache__/
@@ -56,3 +58,8 @@ secrets/
 .idea/
 Thumbs.db
 .DS_Store
+
+# Notes personnelles — contiennent des valeurs réelles (n° de compte, buckets).
+# La documentation destinée au dépôt est dans docs/.
+MEMO-PERSO.md
+*.perso.md
