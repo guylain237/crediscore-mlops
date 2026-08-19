@@ -1,0 +1,44 @@
+# Alertes proactives — exigées par les Blocs 2 (infrastructure) et 3 (pipeline).
+# Chaque règle porte un seuil justifié, pas une valeur arbitraire.
+groups:
+  - name: infrastructure
+    rules:
+      - alert: DisqueBientotPlein
+        # Le data lake absorbe les volumes, mais les logs Airflow et les images
+        # Docker vivent sur le disque racine de 30 Go.
+        expr: (node_filesystem_avail_bytes{mountpoint="/host"} / node_filesystem_size_bytes{mountpoint="/host"}) < 0.15
+        for: 5m
+        labels:
+          severite: critique
+        annotations:
+          resume: "Moins de 15 % d'espace disque libre sur la VM de traitement"
+
+      - alert: MemoireSaturee
+        # 8 Go partagés par toute la pile : au-delà de 90 %, Spark se fait tuer
+        # par le noyau avant de terminer une agrégation.
+        expr: (1 - node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes) > 0.90
+        for: 10m
+        labels:
+          severite: avertissement
+        annotations:
+          resume: "Mémoire de la VM au-dessus de 90 % depuis 10 minutes"
+
+  - name: pipeline
+    rules:
+      - alert: TacheAirflowEnEchec
+        # Toute tâche en échec doit alerter : le pipeline doit fonctionner sans
+        # intervention manuelle (exigence d'automatisation du Bloc 3).
+        expr: increase(airflow_ti_failures[15m]) > 0
+        for: 1m
+        labels:
+          severite: critique
+        annotations:
+          resume: "Au moins une tâche Airflow a échoué dans les 15 dernières minutes"
+
+      - alert: OrdonnanceurArrete
+        expr: up{job="airflow"} == 0
+        for: 5m
+        labels:
+          severite: critique
+        annotations:
+          resume: "L'ordonnanceur Airflow ne répond plus"

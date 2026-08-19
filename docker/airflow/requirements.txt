@@ -1,0 +1,15 @@
+# Accès S3 (data lake) depuis les DAGs
+apache-airflow-providers-amazon==9.1.0
+boto3>=1.35
+
+# Feature store PostgreSQL
+psycopg2-binary>=2.9
+apache-airflow-providers-postgres==5.14.0
+
+# Traitement
+pandas>=2.2
+pyarrow>=17.0
+pyspark==3.5.3
+
+# Suivi d'expériences (déclenchement du réentraînement, Bloc 4)
+mlflow>=2.14

@@ -52,7 +52,7 @@ data "aws_iam_policy_document" "droits_traitement" {
     condition {
       test     = "StringLike"
       variable = "s3:prefix"
-      values   = ["raw/*", "clean/*", "curated/*", "reference/*"]
+      values   = ["raw/*", "clean/*", "curated/*", "reference/*", "mlflow/*"]
     }
   }
 
@@ -71,6 +71,19 @@ data "aws_iam_policy_document" "droits_traitement" {
     resources = [
       "${aws_s3_bucket.datalake.arn}/clean/*",
       "${aws_s3_bucket.datalake.arn}/curated/*",
+    ]
+  }
+
+  # Artefacts MLflow : modèles entraînés, graphiques SHAP, rapports d'équité.
+  # Ils vivent dans le data lake plutôt que sur le disque de la VM, pour deux
+  # raisons de fond : ils survivent à l'extinction du soir (politique P-9), et
+  # ils héritent du chiffrement et du versionnage du bucket — ce qui rend la
+  # piste d'audit d'un modèle aussi solide que celle des données.
+  statement {
+    sid     = "PublierLesArtefactsMLflow"
+    actions = ["s3:GetObject", "s3:PutObject", "s3:DeleteObject"]
+    resources = [
+      "${aws_s3_bucket.datalake.arn}/mlflow/*",
     ]
   }
 

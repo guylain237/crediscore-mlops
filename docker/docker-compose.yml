@@ -1,0 +1,195 @@
+# Pile de traitement CrediScore — démonstrateur mono-VM (décision D-101).
+#
+# Tout tourne sur une seule EC2 : orchestration, feature store, suivi
+# d'expériences et supervision. Les mêmes images seraient déployées sur un
+# cluster à l'échelle cible — seul le placement changerait, pas le code.
+#
+# Aucun identifiant AWS n'apparaît ici : les conteneurs empruntent le rôle IAM
+# de l'instance (contrôle C-9). C'est ce qui permet d'écrire « secrets gérés »
+# dans les livrables sans mentir.
+#
+# Démarrage :  docker compose --env-file .env up -d
+# Arrêt     :  docker compose down            (les volumes survivent)
+
+name: crediscore
+
+x-airflow-commun: &airflow-commun
+  build:
+    context: .
+    dockerfile: airflow/Dockerfile
+  environment: &airflow-env
+    AIRFLOW__CORE__EXECUTOR: LocalExecutor
+    AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+    AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: "true"
+    AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://${POSTGRES_UTILISATEUR}:${POSTGRES_MOT_DE_PASSE}@postgres:5432/airflow
+    AIRFLOW__WEBSERVER__EXPOSE_CONFIG: "false"
+    # Métriques exposées à Prometheus (supervision du pipeline, Bloc 3)
+    AIRFLOW__METRICS__STATSD_ON: "true"
+    AIRFLOW__METRICS__STATSD_HOST: statsd-exporter
+    AIRFLOW__METRICS__STATSD_PORT: "9125"
+    # Connexions utilisées par les DAGs
+    CREDISCORE_BUCKET: ${CREDISCORE_BUCKET}
+    CREDISCORE_DSN: postgresql://${POSTGRES_UTILISATEUR}:${POSTGRES_MOT_DE_PASSE}@postgres:5432/crediscore
+    MLFLOW_TRACKING_URI: http://mlflow:5000
+    AWS_DEFAULT_REGION: ${AWS_REGION}
+  volumes:
+    - ../pipelines/dags:/opt/airflow/dags:ro
+    - ../pipelines/spark_jobs:/opt/airflow/spark_jobs:ro
+    - airflow-logs:/opt/airflow/logs
+  depends_on:
+    postgres:
+      condition: service_healthy
+  restart: unless-stopped
+
+services:
+  # ─── Feature store + métadonnées d'orchestration ───────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_UTILISATEUR}
+      POSTGRES_PASSWORD: ${POSTGRES_MOT_DE_PASSE}
+      POSTGRES_DB: crediscore
+    volumes:
+      - postgres-donnees:/var/lib/postgresql/data
+      # Exécuté au tout premier démarrage uniquement
+      - ./sql:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_UTILISATEUR} -d crediscore"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    # Non exposé hors de la VM : seuls les conteneurs y accèdent.
+    expose:
+      - "5432"
+    restart: unless-stopped
+
+  # ─── Suivi d'expériences et registre de modèles ────────────────────────────
+  mlflow:
+    build:
+      context: .
+      dockerfile: mlflow/Dockerfile
+    command: >
+      mlflow server
+      --host 0.0.0.0
+      --port 5000
+      --backend-store-uri postgresql://${POSTGRES_UTILISATEUR}:${POSTGRES_MOT_DE_PASSE}@postgres:5432/mlflow
+      --artifacts-destination s3://${CREDISCORE_BUCKET}/mlflow
+      --serve-artifacts
+    environment:
+      AWS_DEFAULT_REGION: ${AWS_REGION}
+    ports:
+      - "5000:5000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # ─── Orchestration ─────────────────────────────────────────────────────────
+  airflow-init:
+    <<: *airflow-commun
+    entrypoint: /bin/bash
+    command:
+      - -c
+      - |
+        airflow db migrate
+        airflow users create \
+          --username "${AIRFLOW_ADMIN_UTILISATEUR}" \
+          --password "${AIRFLOW_ADMIN_MOT_DE_PASSE}" \
+          --firstname Admin --lastname CrediScore \
+          --role Admin --email admin@crediscore.local || true
+    restart: on-failure
+
+  airflow-webserver:
+    <<: *airflow-commun
+    command: webserver
+    ports:
+      - "8080:8080"
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    depends_on:
+      airflow-init:
+        condition: service_completed_successfully
+
+  airflow-scheduler:
+    <<: *airflow-commun
+    command: scheduler
+    depends_on:
+      airflow-init:
+        condition: service_completed_successfully
+
+  # ─── Supervision ───────────────────────────────────────────────────────────
+  prometheus:
+    image: prom/prometheus:v2.55.1
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.retention.time=15d
+    volumes:
+      - ../monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ../monitoring/regles_alertes.yml:/etc/prometheus/regles_alertes.yml:ro
+      - prometheus-donnees:/prometheus
+    ports:
+      - "9090:9090"
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:11.3.1
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_UTILISATEUR}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_MOT_DE_PASSE}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      # Accessibilité (RGAA) : thème clair par défaut, contrastes conformes
+      GF_USERS_DEFAULT_THEME: light
+    volumes:
+      - ../monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - grafana-donnees:/var/lib/grafana
+    ports:
+      - "3000:3000"
+    depends_on:
+      - prometheus
+    restart: unless-stopped
+
+  # Métriques de la VM (CPU, RAM, disque) — surveillance d'infrastructure Bloc 2
+  node-exporter:
+    image: prom/node-exporter:v1.8.2
+    command:
+      - --path.rootfs=/host
+    pid: host
+    volumes:
+      - /:/host:ro,rslave
+    expose:
+      - "9100"
+    restart: unless-stopped
+
+  # Métriques par conteneur — permet d'attribuer la charge à un service
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:v0.49.1
+    privileged: true
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+      - /dev/disk/:/dev/disk:ro
+    expose:
+      - "8080"
+    restart: unless-stopped
+
+  # Traduit les métriques StatsD d'Airflow en métriques Prometheus
+  statsd-exporter:
+    image: prom/statsd-exporter:v0.28.0
+    command:
+      - --statsd.listen-udp=:9125
+      - --web.listen-address=:9102
+    expose:
+      - "9102"
+      - "9125"
+    restart: unless-stopped
+
+volumes:
+  postgres-donnees:
+  airflow-logs:
+  prometheus-donnees:
+  grafana-donnees:

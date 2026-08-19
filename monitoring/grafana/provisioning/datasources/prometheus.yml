@@ -1,0 +1,12 @@
+# Source de données provisionnée : Grafana est utilisable dès le premier
+# démarrage, sans configuration manuelle — l'infrastructure est reproductible
+# jusqu'aux tableaux de bord.
+apiVersion: 1
+
+datasources:
+  - name: Prometheus
+    type: prometheus
+    access: proxy
+    url: http://prometheus:9090
+    isDefault: true
+    editable: false
