@@ -1,13 +1,27 @@
 # Gabarit des variables d'entrée.
 #
-# Copier en `terraform.tfvars` (non versionné — voir .gitignore) pour surcharger
-# les valeurs par défaut définies dans variables.tf. Sans ce fichier, les
-# défauts s'appliquent et l'infrastructure se déploie correctement : il n'est
-# donc utile que pour dévier de la configuration nominale.
+# Copier en `terraform.tfvars` (non versionné — voir .gitignore) et renseigner
+# `ip_admin`, la seule variable sans valeur par défaut.
 
+# ─── Obligatoire ─────────────────────────────────────────────────────────────
+# Adresse IP publique du poste administrateur, sans masque.
+#   (Invoke-RestMethod https://checkip.amazonaws.com).Trim()
+ip_admin = "VOTRE.IP.PUBLIQUE.ICI"
+
+# ─── Facultatif : les défauts de variables.tf s'appliquent sinon ─────────────
 region        = "eu-north-1"
 nom_projet    = "crediscore"
 environnement = "demonstrateur" # ou "cible" — voir décision D-101
 
-# Rétention des anciennes versions d'objets, en jours.
+# Interrupteur de la VM (politique P-9) : false = éteinte, aucune facturation.
+vm_active = true
+
+# Gabarit de la VM. t3.large (8 Go) pour la pile complète ;
+# t3.medium (4 Go) suffit si l'on ne lance que quelques services.
+type_instance    = "t3.large"
+taille_disque_go = 30
+
+chemin_cle_publique = "~/.ssh/id_ed25519.pub"
+
+# Rétention des anciennes versions d'objets S3, en jours.
 jours_conservation_versions = 30

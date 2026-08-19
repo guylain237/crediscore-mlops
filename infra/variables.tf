@@ -39,6 +39,98 @@ variable "environnement" {
   }
 }
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Réseau
+# ─────────────────────────────────────────────────────────────────────────────
+
+variable "cidr_vpc" {
+  description = "Plage d'adresses privées du VPC."
+  type        = string
+  default     = "10.0.0.0/16"
+}
+
+variable "cidr_sous_reseau_public" {
+  description = "Sous-réseau public — héberge la VM de traitement."
+  type        = string
+  default     = "10.0.1.0/24"
+}
+
+variable "cidr_sous_reseau_prive" {
+  description = "Sous-réseau privé — vide dans le démonstrateur, prévu pour la cible."
+  type        = string
+  default     = "10.0.2.0/24"
+}
+
+variable "ip_admin" {
+  description = <<-DESC
+    Adresse IP publique du poste administrateur. C'est la SEULE adresse
+    autorisée à joindre la VM (SSH et interfaces web).
+
+    La retrouver :  (Invoke-RestMethod https://checkip.amazonaws.com).Trim()
+
+    Une IP résidentielle change : si l'accès est refusé un matin, c'est
+    probablement elle. Mettre à jour terraform.tfvars puis `terraform apply`.
+  DESC
+  type        = string
+
+  validation {
+    condition     = can(regex("^([0-9]{1,3}\\.){3}[0-9]{1,3}$", var.ip_admin))
+    error_message = "Format attendu : une adresse IPv4, sans masque (ex. 203.0.113.10)."
+  }
+}
+
+# ─────────────────────────────────────────────────────────────────────────────
+# VM de traitement
+# ─────────────────────────────────────────────────────────────────────────────
+
+variable "vm_active" {
+  description = <<-DESC
+    Interrupteur de la VM — la seule ressource facturée à l'heure.
+
+      Le soir :  terraform apply -var="vm_active=false"
+      Le matin : terraform apply
+
+    Politique P-9 du plan de gouvernance. Tout le reste (VPC, IAM, S3) est
+    gratuit et n'est jamais détruit.
+  DESC
+  type        = bool
+  default     = true
+}
+
+variable "type_instance" {
+  description = <<-DESC
+    Gabarit de la VM. La pile complète (Airflow + PostgreSQL + MLflow +
+    Prometheus + Grafana + Spark local) demande environ 8 Go de mémoire.
+
+      t3.medium : 2 vCPU, 4 Go  — ~0,05 USD/h — trop juste, la machine
+                  commencera à utiliser le swap
+      t3.large  : 2 vCPU, 8 Go  — ~0,09 USD/h — retenu
+
+    À ~9 h de fonctionnement par jour et avec extinction le soir, t3.large
+    revient à environ 0,80 USD/jour. Laissée allumée jour et nuit, elle
+    coûterait 2,10 USD/jour : l'extinction n'est pas une coquetterie.
+  DESC
+  type        = string
+  default     = "t3.large"
+}
+
+variable "taille_disque_go" {
+  description = "Disque racine en Go. Les images Docker de la pile en occupent ~15."
+  type        = number
+  default     = 30
+
+  validation {
+    condition     = var.taille_disque_go >= 20
+    error_message = "20 Go minimum : en dessous, les images Docker ne tiennent pas."
+  }
+}
+
+variable "chemin_cle_publique" {
+  description = "Clé publique SSH déposée sur la VM. La clé privée ne quitte jamais le poste."
+  type        = string
+  default     = "~/.ssh/id_ed25519.pub"
+}
+
 variable "jours_conservation_versions" {
   description = <<-DESC
     Durée de conservation des anciennes versions d'objets S3.
