@@ -122,9 +122,14 @@ locals {
   }
 }
 
+# ATTENTION : AWS restreint les descriptions de groupes de securite et de regles
+# a ce jeu de caracteres, apostrophe et accents EXCLUS :
+#   a-zA-Z0-9 . _ - : / ( ) # , @ [ ] + = & ; { } ! $ *
+# `terraform validate` ne le detecte pas — l'erreur ne tombe qu'a l'`apply`.
+# Les descriptions ci-dessous sont donc volontairement sans accent ni apostrophe.
 resource "aws_security_group" "vm_traitement" {
   name        = "${var.nom_projet}-vm-traitement"
-  description = "Acces restreint a l'IP administrateur uniquement"
+  description = "Acces restreint a la seule IP administrateur"
   vpc_id      = aws_vpc.principal.id
 
   tags = {

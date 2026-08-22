@@ -60,3 +60,25 @@
   données brutes ni à la suppression.
 - **Suite :** GitHub Actions s'authentifiera par fédération OIDC, sans clé
   stockée dans les secrets du dépôt (Bloc 4). Procédure : `docs/connexion-aws.md`.
+
+## D-105 — 19/08/2026 — Un `apply` interrompu à mi-parcours devient un test
+
+- **Contexte :** `terraform validate` déclare la configuration valide, puis
+  `terraform apply` échoue après avoir créé 12 ressources sur 22 :
+  `InvalidParameterValue: Invalid security group description`. Une apostrophe
+  dans « l'IP administrateur » — AWS n'accepte, pour ces champs, que
+  `a-zA-Z0-9 . _ - : / ( ) # , @ [ ] + = & ; { } ! $ *`, sans accent ni apostrophe.
+- **Options :** corriger et retenir la règle ; ne plus écrire de description ;
+  corriger **et** rendre la contrainte vérifiable automatiquement.
+- **Choix :** correction, commentaire explicatif dans `network.tf`, et
+  **garde-fou `tests/test_terraform_descriptions.py`** qui contrôle chaque
+  description de groupe de sécurité contre le jeu de caractères autorisé.
+  Le garde-fou a été vérifié par l'absurde : apostrophe réinjectée → test rouge,
+  retirée → test vert.
+- **Raison :** un `apply` interrompu laisse l'infrastructure dans un état partiel,
+  le plus coûteux à diagnostiquer. Le contrôle coûte 0,2 seconde et s'exécute
+  avant tout `apply`. C'est la même logique que le contrôle C-1 sur les variables
+  sensibles : une règle qu'aucun test ne vérifie n'est qu'une intention.
+- **Portée :** la restriction ne vaut que pour les groupes de sécurité et leurs
+  règles. Les descriptions de rôles IAM acceptent l'apostrophe — vérifié : le
+  rôle `api_scoring` a été créé sans erreur.
