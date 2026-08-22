@@ -36,8 +36,8 @@ resource "aws_key_pair" "admin" {
 }
 
 resource "aws_instance" "traitement" {
-  # 1 quand vm_active = true, 0 sinon. C'est l'interrupteur du soir.
-  count = var.vm_active ? 1 : 0
+  # L'instance existe en permanence. L'interrupteur du soir l'ARRÊTE, il ne la
+  # détruit plus (voir aws_ec2_instance_state, plus bas, et la décision D-108).
 
   ami           = data.aws_ssm_parameter.ami_al2023.value
   instance_type = var.type_instance
@@ -52,8 +52,8 @@ resource "aws_instance" "traitement" {
     volume_type = "gp3"
 
     # Chiffrement au repos (politique P-8, contrôle C-8). La clé gérée par AWS
-    # est gratuite ; une clé KMS dédiée coûterait ~1 USD/mois pour une
-    # gouvernance de clé sans objet sur un disque éphémère détruit chaque soir.
+    # suffit ici : le disque ne contient aucune donnée qui n'existe déjà,
+    # chiffrée, dans le data lake.
     encrypted = true
 
     delete_on_termination = true
@@ -77,4 +77,34 @@ resource "aws_instance" "traitement" {
     Name = "${var.nom_projet}-vm-traitement"
     Role = "traitement"
   }
+}
+
+
+# =============================================================================
+# L'INTERRUPTEUR DU SOIR — arrêt, et non destruction
+# =============================================================================
+#
+# Une instance ARRÊTÉE ne facture plus aucune heure de calcul : il ne reste que
+# le disque, de l'ordre de quelques centimes par jour. Une instance DÉTRUITE ne
+# coûte rien du tout, mais emporte son disque racine — donc PostgreSQL, le
+# schéma en étoile, le feature store, la piste d'audit des décisions et les
+# images Docker construites, dont celle d'Airflow qui demande une dizaine de
+# minutes à reconstruire.
+#
+# L'arbitrage est sans ambiguïté à ce stade du projet : quelques centimes par
+# nuit contre une demi-heure de remise en route chaque matin, sur une machine
+# qui porte désormais de l'état.
+#
+# La reproductibilité complète reste démontrable — et sera filmée une fois pour
+# la vidéo du Bloc 2 : `terraform destroy` puis `terraform apply` reconstruit
+# l'ensemble à partir du seul code.
+#
+#   Le soir  :  terraform apply -var="vm_active=false"     -> stopped
+#   Le matin :  terraform apply                            -> running
+#
+# Attention : l'adresse IP publique change à chaque redémarrage. Relire
+# `terraform output` le matin plutôt que de garder l'ancienne en favori.
+resource "aws_ec2_instance_state" "traitement" {
+  instance_id = aws_instance.traitement.id
+  state       = var.vm_active ? "running" : "stopped"
 }

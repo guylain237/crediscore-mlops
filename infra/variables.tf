@@ -87,11 +87,19 @@ variable "vm_active" {
   description = <<-DESC
     Interrupteur de la VM — la seule ressource facturée à l'heure.
 
-      Le soir :  terraform apply -var="vm_active=false"
-      Le matin : terraform apply
+      Le soir :  terraform apply -var="vm_active=false"   -> instance arrêtée
+      Le matin : terraform apply                          -> instance démarrée
 
-    Politique P-9 du plan de gouvernance. Tout le reste (VPC, IAM, S3) est
-    gratuit et n'est jamais détruit.
+    ARRÊT, et non destruction (décision D-108) : le disque porte PostgreSQL,
+    donc le schéma en étoile, le feature store et la piste d'audit. Une
+    instance arrêtée ne facture plus aucune heure de calcul ; seul le disque
+    reste, pour quelques centimes par jour.
+
+    L'adresse IP publique change à chaque redémarrage : relire
+    `terraform output` le matin.
+
+    Politique P-9 du plan de gouvernance. Le reste (VPC, IAM, S3) n'est jamais
+    détruit.
   DESC
   type        = bool
   default     = true

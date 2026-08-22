@@ -112,3 +112,29 @@
   (ce qui n'est pas au registre n'est pas publié), explicabilité (d'un facteur
   SHAP à sa définition) et reproductibilité (quel code, quelles données, quel
   jour). Le coût est marginal, la valeur en soutenance est élevée.
+
+## D-108 — 22/08/2026 — L'interrupteur du soir arrête la VM, il ne la détruit plus
+
+- **Contexte :** `vm_active = false` posait `count = 0` sur l'instance. Avec
+  `delete_on_termination = true`, l'extinction du soir emportait le disque
+  racine — donc PostgreSQL, et avec lui le schéma en étoile, le feature store,
+  la piste d'audit des décisions et les images Docker construites. Détecté au
+  moment de lancer l'extinction, le plan annonçant « 1 to destroy ».
+- **Options :** conserver la destruction et tout reconstruire chaque matin ;
+  déporter l'état sur un volume EBS séparé persistant ; **arrêter** l'instance
+  au lieu de la détruire.
+- **Choix :** `aws_ec2_instance_state` piloté par `vm_active`. L'instance existe
+  en permanence, elle est démarrée ou arrêtée. Adresse d'état déplacée par
+  `terraform state mv` pour éviter un remplacement.
+- **Vérifié :** plan du matin et plan du soir affichent tous deux
+  **0 to destroy**.
+- **Raison :** une instance arrêtée ne facture plus d'heures de calcul ; seul le
+  disque subsiste, pour quelques centimes par jour. En face, la destruction
+  imposait une demi-heure de remise en route chaque matin — dont une dizaine de
+  minutes rien que pour reconstruire l'image Airflow (Java + PySpark). À
+  quatorze jours de l'échéance, l'arbitrage n'a rien d'ambigu.
+- **Ce qui n'est pas perdu :** la reproductibilité intégrale reste démontrable,
+  et sera filmée une fois pour la vidéo du Bloc 2 — `terraform destroy` puis
+  `terraform apply` reconstruit l'ensemble à partir du seul code.
+- **Effet de bord assumé :** l'adresse IP publique change à chaque redémarrage.
+  Relire `terraform output` le matin.
