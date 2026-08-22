@@ -24,14 +24,22 @@ systemctl enable --now docker
 # Prend effet à la prochaine ouverture de session SSH.
 usermod -aG docker ec2-user
 
-echo "=== Installation du plugin docker compose ==="
-# Le plugin n'est pas dans les dépôts Amazon Linux 2023 : on l'installe depuis
-# les publications officielles Docker.
+# Versions FIGÉES, et non « latest » : une image reconstruite dans trois mois
+# doit se comporter exactement comme celle qui a été filmée pour le jury.
+# C'est aussi ce qui a mordu le 19/08 — « latest » avait livré un Compose v5.5
+# qui exige buildx >= 0.17, absent de la machine : la construction échouait.
+VERSION_COMPOSE=v2.31.0
+VERSION_BUILDX=v0.19.3
+
+echo "=== Installation des plugins docker compose et buildx ==="
 mkdir -p /usr/local/lib/docker/cli-plugins
-curl -SL \
-  "https://github.com/docker/compose/releases/latest/download/docker-compose-linux-x86_64" \
-  -o /usr/local/lib/docker/cli-plugins/docker-compose
+
+curl -SL   "https://github.com/docker/compose/releases/download/${VERSION_COMPOSE}/docker-compose-linux-x86_64"   -o /usr/local/lib/docker/cli-plugins/docker-compose
 chmod +x /usr/local/lib/docker/cli-plugins/docker-compose
+
+# buildx est requis par `docker compose build` depuis Compose v2.
+curl -SL   "https://github.com/docker/buildx/releases/download/${VERSION_BUILDX}/buildx-${VERSION_BUILDX}.linux-amd64"   -o /usr/local/lib/docker/cli-plugins/docker-buildx
+chmod +x /usr/local/lib/docker/cli-plugins/docker-buildx
 
 echo "=== Arborescence de travail ==="
 mkdir -p /opt/crediscore/{dags,spark_jobs,monitoring,donnees}
@@ -40,6 +48,7 @@ chown -R ec2-user:ec2-user /opt/crediscore
 echo "=== Verification ==="
 docker --version
 docker compose version
+docker buildx version
 
 # Marqueur lu par la commande de vérification post-déploiement : tant que ce
 # fichier n'existe pas, l'initialisation n'est pas terminée.
