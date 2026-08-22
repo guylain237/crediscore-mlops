@@ -82,3 +82,33 @@
 - **Portée :** la restriction ne vaut que pour les groupes de sécurité et leurs
   règles. Les descriptions de rôles IAM acceptent l'apostrophe — vérifié : le
   rôle `api_scoring` a été créé sans erreur.
+
+## D-106 — 22/08/2026 — La séparation des schémas comme mesure de non-discrimination
+
+- **Contexte :** la note d'équité annonce que les attributs sensibles sont isolés
+  et servent uniquement à l'audit. Restait à le rendre vrai dans la base.
+- **Options :** une colonne « ne pas utiliser » dans la table des variables ;
+  une convention de nommage ; des schémas séparés avec des droits distincts.
+- **Choix :** quatre schémas — `entrepot`, `feature_store`, `audit_equite`,
+  `journal`. Le genre et l'âge vivent dans `audit_equite`, jamais dans
+  `feature_store`. De plus, `feature_store.registre_variables` porte une
+  contrainte `CHECK (est_sensible = FALSE)` : la base refuse l'insertion d'une
+  variable sensible au registre des variables servies.
+- **Vérifié le 22/08 :** insertion d'une variable normale acceptée, insertion de
+  `CODE_GENDER` rejetée par la contrainte. Le contrôle n'est pas déclaratif.
+- **Raison :** une convention se contourne par oubli, une contrainte non. La
+  non-discrimination devient une propriété du modèle physique, opposable en
+  audit, et non une promesse dans un document.
+
+## D-107 — 22/08/2026 — Le registre des variables comme pièce de conformité
+
+- **Contexte :** l'AI Act et le RGPD demandent la minimisation et la traçabilité
+  des données utilisées ; SHAP produit des noms de variables qu'un analyste doit
+  pouvoir interpréter sans lire le code.
+- **Choix :** `feature_store.registre_variables` (source, agrégat, type,
+  description) et `feature_store.journal_publication` (run Airflow, SHA du
+  commit, empreinte du lot, résultat des contrôles).
+- **Raison :** une seule table répond à trois exigences distinctes — minimisation
+  (ce qui n'est pas au registre n'est pas publié), explicabilité (d'un facteur
+  SHAP à sa définition) et reproductibilité (quel code, quelles données, quel
+  jour). Le coût est marginal, la valeur en soutenance est élevée.
