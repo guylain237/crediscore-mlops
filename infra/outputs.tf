@@ -44,13 +44,13 @@ output "vm_active" {
 
 output "ip_publique_vm" {
   description = "Adresse publique de la VM. Change à chaque recréation."
-  value       = var.vm_active ? aws_instance.traitement.public_ip : "VM eteinte"
+  value       = var.vm_active ? data.aws_instance.courante.public_ip : "VM eteinte"
 }
 
 output "commande_ssh" {
   description = "Commande de connexion prête à copier."
   value = var.vm_active ? (
-    "ssh -i ~/.ssh/id_ed25519 ec2-user@${aws_instance.traitement.public_ip}"
+    "ssh -i ~/.ssh/id_ed25519 ec2-user@${data.aws_instance.courante.public_ip}"
   ) : "VM eteinte — terraform apply pour la rallumer"
 }
 
@@ -58,7 +58,7 @@ output "interfaces_web" {
   description = "URL des interfaces, accessibles depuis la seule IP administrateur."
   value = var.vm_active ? {
     for nom, port in local.ports_applicatifs :
-    nom => "http://${aws_instance.traitement.public_ip}:${port}"
+    nom => "http://${data.aws_instance.courante.public_ip}:${port}"
   } : {}
 }
 

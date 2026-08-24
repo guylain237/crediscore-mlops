@@ -108,3 +108,27 @@ resource "aws_ec2_instance_state" "traitement" {
   instance_id = aws_instance.traitement.id
   state       = var.vm_active ? "running" : "stopped"
 }
+
+
+# =============================================================================
+# LIRE L'ADRESSE IP APRÈS LE DÉMARRAGE, ET NON AVANT
+# =============================================================================
+#
+# Problème constaté le 24/08 : après un redémarrage, `terraform output`
+# renvoyait une adresse vide.
+#
+# La cause tient à l'ordre des opérations. Terraform rafraîchit l'état AVANT
+# d'appliquer : à cet instant la machine est encore arrêtée, donc sans adresse
+# publique. Il démarre ensuite l'instance — qui reçoit une nouvelle adresse —
+# mais `aws_instance.traitement` n'a pas été modifié, donc sa valeur en mémoire
+# reste celle d'avant : vide.
+#
+# Cette source de données relit l'instance APRÈS le démarrage, grâce au
+# `depends_on`. Les sorties s'appuient sur elle, et affichent l'adresse réelle
+# dès le premier `apply`.
+data "aws_instance" "courante" {
+  instance_id = aws_instance.traitement.id
+
+  # C'est tout l'intérêt : forcer la lecture après le changement d'état.
+  depends_on = [aws_ec2_instance_state.traitement]
+}
