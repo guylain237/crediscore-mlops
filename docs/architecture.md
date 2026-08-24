@@ -1,0 +1,224 @@
+# Architecture technique — CrediScore
+
+**Bloc 2 — livrable : documentation accessible de l'architecture**
+Dernière vérification sur l'infrastructure réelle : 24/08/2026.
+
+Ce document décrit ce qui **tourne**, pas ce qui est prévu. Chaque élément du
+diagramme correspond à une ressource présente dans `terraform state list` ou à
+un conteneur visible dans `docker compose ps`.
+
+---
+
+## 1. Vue d'ensemble
+
+```mermaid
+flowchart TB
+    subgraph sources["SOURCES — 3 systèmes, 8 fichiers"]
+        S1["Système de souscription<br/>application_train · application_test<br/>307 511 dossiers"]
+        S2["Cœur de gestion crédit<br/>previous_application · POS_CASH<br/>credit_card · installments<br/>≈ 29 M lignes"]
+        S3["Bureau de crédit externe<br/>bureau · bureau_balance<br/>≈ 29 M lignes"]
+    end
+
+    subgraph aws["AWS — eu-north-1, réseau privé"]
+        subgraph lac["Data lake S3 — chiffré, versionné, accès public bloqué"]
+            Z1["raw/<br/>lecture seule"]
+            Z2["clean/"]
+            Z3["curated/"]
+            Z4["mlflow/<br/>artefacts"]
+        end
+
+        subgraph vm["VM de traitement — EC2 t3.large, disque chiffré"]
+            AF["Airflow<br/>orchestration"]
+            SP["Spark local<br/>agrégations"]
+            PG[("PostgreSQL<br/>feature store<br/>+ entrepôt étoile")]
+            ML["MLflow<br/>expériences · modèles"]
+            API["API de scoring<br/>(Bloc 4)"]
+        end
+
+        subgraph sup["Supervision"]
+            PR["Prometheus<br/>6 règles d'alerte"]
+            GR["Grafana<br/>tableaux de bord"]
+        end
+    end
+
+    POS["Point de vente<br/>décision en quelques secondes"]
+
+    S1 --> Z1
+    S2 --> Z1
+    S3 --> Z1
+    Z1 --> AF
+    AF --> SP
+    SP --> Z2
+    SP --> Z3
+    Z3 --> PG
+    PG --> ML
+    PG --> API
+    ML --> Z4
+    API --> POS
+    AF -.métriques.-> PR
+    vm -.métriques.-> PR
+    PR --> GR
+
+    classDef zone fill:#e8f0fe,stroke:#1a56db,color:#1e3a5f
+    classDef service fill:#ffffff,stroke:#1a56db,color:#1e3a5f
+    classDef externe fill:#f3f4f6,stroke:#6b7280,color:#374151
+    class Z1,Z2,Z3,Z4 zone
+    class AF,SP,PG,ML,API,PR,GR service
+    class S1,S2,S3,POS externe
+```
+
+---
+
+## 2. Les couches, et pourquoi elles sont séparées
+
+| Couche | Composant | Rôle | Pourquoi séparé |
+|---|---|---|---|
+| **Stockage** | S3, 4 préfixes | Données brutes, nettoyées, prêtes, artefacts | Chaque zone a ses propres droits : `raw/` est en lecture seule même pour la VM, ce qui rend la donnée source infalsifiable |
+| **Orchestration** | Airflow | Enchaîne ingestion → agrégation → publication | Reprise sur erreur et alertes, sans intervention manuelle (exigence Bloc 3) |
+| **Traitement** | Spark en mode local | Agrège 58 M de lignes en variables par dossier | Même code qu'un cluster ; seul le maître change à l'échelle cible |
+| **Service de variables** | PostgreSQL | Feature store + entrepôt en étoile | Définitions identiques à l'entraînement et au scoring — élimine le *train/serving skew* |
+| **Suivi de modèles** | MLflow | Expériences, métriques, registre | Rend le réentraînement reproductible (exigence Bloc 4) |
+| **Supervision** | Prometheus + Grafana | Métriques, seuils, alertes | Détecter une panne avant l'utilisateur |
+
+---
+
+## 3. Modèle de données — schéma en étoile
+
+```mermaid
+erDiagram
+    FAIT_DEMANDE }o--|| DIM_DEMANDEUR : "concerne"
+    FAIT_DEMANDE }o--|| DIM_PRODUIT : "porte sur"
+    FAIT_DEMANDE }o--|| DIM_TEMPS : "datée par"
+    FAIT_DEMANDE }o--|| DIM_BUREAU_AGREGE : "enrichie par"
+
+    FAIT_DEMANDE {
+        bigint id_demande PK
+        bigint sk_id_curr UK
+        numeric montant_credit
+        numeric ratio_annuite_revenu
+        smallint cible_defaut
+        numeric probabilite_defaut
+        text decision
+    }
+    DIM_DEMANDEUR {
+        bigint id_demandeur PK
+        text type_revenu
+        integer anciennete_emploi_jours
+    }
+    DIM_PRODUIT {
+        bigint id_produit PK
+        text type_contrat
+    }
+    DIM_TEMPS {
+        integer id_temps PK
+        date date_complete
+    }
+    DIM_BUREAU_AGREGE {
+        bigint id_bureau_agrege PK
+        integer nb_credits_actifs
+        numeric montant_du_total
+    }
+```
+
+**Le grain de la table de faits est la demande de crédit** : une ligne, une
+décision d'octroi possible. Les quatre dimensions répondent aux questions du
+reporting risques — *qui*, *quoi*, *quand*, *avec quelle exposition externe*.
+
+`dim_bureau_agrege` mérite un mot : c'est une dimension **précalculée**. Agréger
+29 millions de lignes de bureau à chaque demande serait incompatible avec une
+réponse en quelques secondes au point de vente. Le pipeline la rafraîchit
+quotidiennement ; le scoring se contente de la lire.
+
+---
+
+## 4. Sécurité — quatre mesures, et la preuve de chacune
+
+| Mesure | Mise en œuvre | Comment le vérifier |
+|---|---|---|
+| **Chiffrement au repos** | S3 chiffré côté serveur ; volume EC2 `encrypted = true` | Console AWS, ou `terraform state show aws_s3_bucket_server_side_encryption_configuration.datalake` |
+| **Chiffrement en transit** | TLS pour S3 et les API AWS ; SSH pour l'accès à la VM | — |
+| **Moindre privilège** | Deux rôles IAM distincts : la VM et l'API de scoring | Depuis la VM : lecture `raw/` ✅, écriture `curated/` ✅, écriture `raw/` **refusée** |
+| **Aucun secret dans le code** | Rôle IAM d'instance ; `.env` hors dépôt ; clé de déploiement en lecture seule | `git log -S` sur l'historique : aucune clé, aucun jeton |
+
+**La séparation des schémas PostgreSQL est elle-même une mesure.** Les attributs
+sensibles (genre, âge) vivent dans `audit_equite`, jamais dans `feature_store`,
+et une contrainte `CHECK` fait refuser par la base toute variable marquée
+sensible au registre des variables servies. La non-discrimination devient une
+propriété du modèle physique, opposable en audit.
+
+---
+
+## 5. Les 3V
+
+| Dimension | Réalité mesurée |
+|---|---|
+| **Volume** | ≈ 58 M de lignes consolidées, dont 27,3 M pour les seuls soldes mensuels du bureau |
+| **Vélocité** | Décision synchrone en quelques secondes au point de vente ; rafraîchissement batch quotidien des historiques |
+| **Variété** | 8 fichiers hétérogènes, 3 systèmes sources internes et externe, 3 granularités — dossier, crédit, mois |
+
+---
+
+## 6. Supervision
+
+Six règles d'alerte, chacune avec un seuil justifié et l'action à mener. Toutes
+les expressions ont été **vérifiées contre les métriques réellement exposées** —
+deux d'entre elles interrogeaient au départ des séries inexistantes et ne
+pouvaient jamais se déclencher (décision D-110).
+
+| Alerte | Seuil | Bloc |
+|---|---|---|
+| `DisqueBientotPlein` | < 15 % libres pendant 5 min | 2 |
+| `MemoireSaturee` | > 90 % pendant 10 min | 2 |
+| `ConteneurArrete` | < 9 conteneurs pendant 3 min | 2 |
+| `OrdonnanceurArrete` | aucun battement de cœur Airflow pendant 5 min | 3 |
+| `DagIllisible` | ≥ 1 erreur d'import de DAG | 3 |
+| `TacheAirflowEnEchec` | ≥ 1 échec sur 15 min | 3 |
+
+Le tableau de bord `CrediScore — Infrastructure` est **provisionné par fichier**,
+pas configuré à la main : une réinstallation le retrouve à l'identique. Ses
+seuils de couleur reproduisent exactement ceux des règles — ce qui vire au rouge
+à l'écran est ce qui déclenche une alerte.
+
+> **Limite assumée à ce stade :** les alertes sont évaluées et visibles, mais
+> pas encore *routées* vers un canal (courriel ou Slack). Le point est ouvert et
+> sera traité avant la vidéo du Bloc 3.
+
+---
+
+## 7. Dimensionnement : démonstrateur et cible
+
+L'architecture décrite dans le dossier de projet est celle d'un établissement
+réel. Le démonstrateur en exécute les **mêmes briques logicielles**, à échelle
+réduite, sur une seule machine.
+
+| Brique | Démonstrateur | Cible | Ce qui change |
+|---|---|---|---|
+| Traitement | Spark en mode local | Cluster 3 nœuds | l'URL du maître |
+| Feature store | PostgreSQL conteneurisé | PostgreSQL managé | une chaîne de connexion |
+| Inférence | k3s sur la VM | Kubernetes managé, 3 pods | le contexte `kubectl` |
+| Entraînement | Conteneur à la demande | Cluster éphémère 16 vCPU | une variable Terraform |
+
+Ce n'est pas une simplification de confort mais un **arbitrage coût/bénéfice** :
+le référentiel demande une infrastructure déployée, sécurisée, surveillée et
+documentée — pas un nombre de nœuds. Le code Terraform reste paramétré, et le
+passage à l'échelle cible est un changement de variables, non une réécriture.
+
+---
+
+## 8. Reproductibilité
+
+L'ensemble se reconstruit à partir du seul dépôt :
+
+```bash
+cd infra
+terraform apply                              # réseau, VM, rôles IAM
+ssh ec2-user@$(terraform output -raw ip_publique_vm)
+cd /opt/crediscore/depot/docker
+cp .env.example .env && ${EDITOR:-nano} .env
+docker compose up -d --build                 # les 9 services
+psql -f ../pipelines/sql/01_schemas.sql      # les 9 tables
+```
+
+Aucune étape manuelle en console AWS. C'est ce qui permet d'affirmer que
+l'infrastructure est *dans le code*, et non dans la mémoire de celui qui l'a
+montée.
