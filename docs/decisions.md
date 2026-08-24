@@ -205,3 +205,24 @@
 - **Reste ouvert :** les alertes sont évaluées et visibles dans Grafana, mais
   pas encore routées vers un canal (courriel ou webhook). À traiter avant la
   vidéo du Bloc 3.
+
+## D-111 — 24/08/2026 — Une alerte vérifiée par déclenchement réel
+
+- **Contexte :** après la correction des règles muettes (D-110), il restait à
+  s'assurer que la chaîne complète — métrique, expression, temporisation, état
+  `firing` — fonctionne réellement.
+- **Méthode :** arrêt délibéré d'un conteneur de la pile (`mlflow`), puis
+  observation de `ConteneurArrete`.
+- **Résultat :** condition vraie à 21:38, passage en `pending`, puis état
+  **`firing` à 21:43 UTC** — sévérité critique, avec son résumé et l'action à
+  mener. Conteneur redémarré, pile revenue à neuf services.
+- **Latence mesurée : environ cinq minutes.** Elle se décompose en deux temps :
+  le délai avant que Prometheus considère la série périmée, puis la
+  temporisation `for: 3m` de la règle. Ce n'est pas instantané, et c'est
+  volontaire : une alerte qui se déclenche au moindre soubresaut finit ignorée.
+- **Raison de la démarche :** une règle jamais vue se déclencher est
+  indiscernable d'une règle incapable de se déclencher — c'est précisément ce
+  que l'audit D-110 avait révélé sur deux règles. Le déclenchement provoqué est
+  la seule preuve.
+- **Réutilisable en soutenance :** la séquence dure cinq minutes et se rejoue à
+  volonté. Elle vaut mieux qu'un tableau de bord vert immobile.
