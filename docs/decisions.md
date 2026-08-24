@@ -138,3 +138,38 @@
   `terraform apply` reconstruit l'ensemble à partir du seul code.
 - **Effet de bord assumé :** l'adresse IP publique change à chaque redémarrage.
   Relire `terraform output` le matin.
+
+## D-109 — 24/08/2026 — Clé de déploiement en lecture seule plutôt qu'ouverture du dépôt
+
+- **Contexte :** la VM devait récupérer le code. Le dépôt étant privé, `git clone`
+  échouait, et les fichiers avaient été copiés par `tar` — une copie figée qui
+  diverge du dépôt dès la première modification, sans qu'on s'en aperçoive.
+- **Options :** rendre les dépôts publics ; poser un jeton personnel sur la VM ;
+  garder la copie par `tar` ; **clé de déploiement en lecture seule**.
+- **Choix :** une paire de clés générée **sur la VM** — la partie privée n'a
+  jamais transité — dont la partie publique est déclarée sur GitHub comme clé de
+  déploiement en lecture seule, limitée à `crediscore-mlops`.
+- **Vérifié le 24/08 :** `ssh -T git@github.com` répond « Hi
+  guylain237/crediscore-mlops », donc l'identité est le dépôt et non le compte ;
+  `git pull` fonctionne ; `git push` est refusé — *The key you are
+  authenticating with has been marked as read only*.
+- **Raison — trois arguments, dans l'ordre :**
+  1. **Traçabilité.** Ce qui tourne sur la VM correspond à un commit identifiable.
+     Le SHA déployé se montre à l'écran pendant la démonstration : c'est la
+     preuve que l'artefact filmé est bien celui du dépôt.
+  2. **Surface d'attaque.** Un jeton personnel donnerait accès à tous les dépôts
+     du compte, en écriture. Une clé de déploiement donne la lecture d'un seul
+     dépôt. Si la VM est compromise, l'attaquant lit du code déjà destiné à
+     devenir public — et rien d'autre.
+  3. **Calendrier.** Les dépôts devront être ouverts au jury, mais le faire
+     maintenant, à l'entrée des douze jours les plus chargés, exposerait
+     publiquement la moindre erreur de commit. L'ouverture est reportée au 05/09,
+     après l'audit final.
+- **Préalable traité :** audit de l'historique des deux dépôts avant toute
+  décision d'ouverture — aucun secret, aucune clé, aucun fichier de données ;
+  une seule trouvaille, l'adresse IP du poste utilisée comme exemple dans un
+  message d'erreur, retirée le 24/08. Elle subsiste dans le commit `4ce46d2` :
+  à traiter par réécriture d'historique avant l'ouverture au public.
+- **Conséquence pratique :** `git push` depuis le poste ne met plus à jour la VM
+  tout seul. Le cycle est : commit, push, puis `scripts/mise-a-jour.sh` sur la
+  VM, qui affiche le commit déployé.
