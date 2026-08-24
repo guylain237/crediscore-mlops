@@ -1,12 +1,19 @@
 # Source de données provisionnée : Grafana est utilisable dès le premier
 # démarrage, sans configuration manuelle — l'infrastructure est reproductible
 # jusqu'aux tableaux de bord.
+#
+# L'identifiant `uid` est fixé explicitement : sans lui Grafana en génère un
+# aléatoire à chaque installation, et les tableaux de bord provisionnés ne
+# retrouvent plus leur source.
 apiVersion: 1
 
 datasources:
   - name: Prometheus
+    uid: prometheus
     type: prometheus
     access: proxy
     url: http://prometheus:9090
     isDefault: true
     editable: false
+    jsonData:
+      timeInterval: 15s

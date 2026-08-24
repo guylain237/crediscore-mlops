@@ -1,44 +1,101 @@
 # Alertes proactives — exigées par les Blocs 2 (infrastructure) et 3 (pipeline).
-# Chaque règle porte un seuil justifié, pas une valeur arbitraire.
+#
+# Chaque règle porte un seuil justifié, et chaque expression a été VÉRIFIÉE
+# contre les métriques réellement exposées (audit du 24/08/2026). Deux règles
+# de la première version interrogeaient des séries inexistantes et ne
+# pouvaient donc jamais se déclencher — voir décision D-110.
+#
+# Vérifier une expression avant de l'inscrire ici :
+#   curl -s --get http://<vm>:9090/api/v1/query --data-urlencode 'query=<expr>'
+# Une réponse `"result":[]` signifie que la règle est muette.
+
 groups:
   - name: infrastructure
     rules:
       - alert: DisqueBientotPlein
-        # Le data lake absorbe les volumes, mais les logs Airflow et les images
-        # Docker vivent sur le disque racine de 30 Go.
-        expr: (node_filesystem_avail_bytes{mountpoint="/host"} / node_filesystem_size_bytes{mountpoint="/host"}) < 0.15
+        # Le data lake absorbe les gros volumes, mais les logs Airflow, les
+        # images Docker et le volume PostgreSQL vivent sur le disque racine de
+        # 30 Go. À 15 % libres il reste ~4,5 Go : de quoi voir venir sans
+        # alerter pour rien.
+        #
+        # Point de montage « / » et non « /host » : node-exporter tourne avec
+        # --path.rootfs=/host, mais il publie le point de montage tel que le
+        # système le nomme. Vérifié : 1 série, 24,1 Go libres.
+        expr: node_filesystem_avail_bytes{mountpoint="/"} / node_filesystem_size_bytes{mountpoint="/"} < 0.15
         for: 5m
         labels:
           severite: critique
+          bloc: "2"
         annotations:
           resume: "Moins de 15 % d'espace disque libre sur la VM de traitement"
+          action: "Purger les logs Airflow et les images Docker inutilisées (docker image prune)"
 
       - alert: MemoireSaturee
-        # 8 Go partagés par toute la pile : au-delà de 90 %, Spark se fait tuer
-        # par le noyau avant de terminer une agrégation.
-        expr: (1 - node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes) > 0.90
+        # 8 Go partagés par toute la pile. Au-delà de 90 %, un job Spark se
+        # fait tuer par le noyau avant de terminer son agrégation.
+        # Vérifié : expression évaluable, valeur courante ~33 %.
+        expr: 1 - node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes > 0.90
         for: 10m
         labels:
           severite: avertissement
+          bloc: "2"
         annotations:
           resume: "Mémoire de la VM au-dessus de 90 % depuis 10 minutes"
+          action: "Réduire la parallélisation Spark ou augmenter type_instance"
+
+      - alert: ConteneurArrete
+        # La pile compte 9 services. En perdre un silencieusement — PostgreSQL
+        # au premier chef — casse le pipeline sans message d'erreur évident.
+        expr: count(container_last_seen{name!=""}) < 9
+        for: 3m
+        labels:
+          severite: critique
+          bloc: "2"
+        annotations:
+          resume: "Moins de 9 conteneurs en fonctionnement dans la pile"
+          action: "docker compose ps puis docker compose up -d"
 
   - name: pipeline
     rules:
+      - alert: OrdonnanceurArrete
+        # `up{job="airflow"}` ne surveillait que statsd-exporter, pas Airflow :
+        # l'ordonnanceur pouvait mourir sans que rien ne s'allume. Le battement
+        # de cœur du scheduler est la bonne sonde. Vérifié : métrique présente.
+        expr: increase(airflow_scheduler_heartbeat[5m]) == 0 or absent(airflow_scheduler_heartbeat)
+        for: 5m
+        labels:
+          severite: critique
+          bloc: "3"
+        annotations:
+          resume: "L'ordonnanceur Airflow ne bat plus depuis 5 minutes"
+          action: "docker compose logs airflow-scheduler"
+
+      - alert: DagIllisible
+        # Un DAG à la syntaxe cassée n'apparaît pas dans l'interface : le
+        # pipeline ne tourne tout simplement pas, sans erreur visible.
+        # Vérifié : métrique présente, valeur courante 0.
+        expr: airflow_dag_processing_import_errors > 0
+        for: 2m
+        labels:
+          severite: avertissement
+          bloc: "3"
+        annotations:
+          resume: "Au moins un DAG ne peut pas être chargé par Airflow"
+          action: "Consulter les erreurs d'import dans l'interface Airflow"
+
       - alert: TacheAirflowEnEchec
-        # Toute tâche en échec doit alerter : le pipeline doit fonctionner sans
-        # intervention manuelle (exigence d'automatisation du Bloc 3).
+        # Le pipeline doit fonctionner sans intervention manuelle : toute tâche
+        # en échec doit donc alerter.
+        #
+        # NOTE : ce compteur StatsD n'existe qu'à partir du premier échec réel.
+        # La règle est donc latente tant qu'aucune tâche n'a échoué — ce n'est
+        # pas un défaut, mais elle ne pourra être vérifiée qu'au Bloc 3, en
+        # provoquant délibérément un échec (ce sera filmé pour la vidéo 2).
         expr: increase(airflow_ti_failures[15m]) > 0
         for: 1m
         labels:
           severite: critique
+          bloc: "3"
         annotations:
           resume: "Au moins une tâche Airflow a échoué dans les 15 dernières minutes"
-
-      - alert: OrdonnanceurArrete
-        expr: up{job="airflow"} == 0
-        for: 5m
-        labels:
-          severite: critique
-        annotations:
-          resume: "L'ordonnanceur Airflow ne répond plus"
+          action: "Ouvrir le DAG concerné, onglet Graph, consulter le journal de la tâche"
