@@ -63,3 +63,9 @@ Thumbs.db
 # La documentation destinée au dépôt est dans docs/.
 MEMO-PERSO.md
 *.perso.md
+
+# Scripts de démonstration : notes de préparation orale, strictement privées.
+# Elles ne font pas partie des livrables et ne doivent jamais être publiées.
+*script-video*
+*video-bloc*
+PERSO-*
