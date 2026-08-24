@@ -173,3 +173,35 @@
 - **Conséquence pratique :** `git push` depuis le poste ne met plus à jour la VM
   tout seul. Le cycle est : commit, push, puis `scripts/mise-a-jour.sh` sur la
   VM, qui affiche le commit déployé.
+
+## D-110 — 24/08/2026 — Deux règles d'alerte sur trois étaient muettes
+
+- **Contexte :** avant de construire les tableaux de bord, contrôle des
+  métriques réellement exposées par Prometheus. Deux des trois règles écrites le
+  22/08 interrogeaient des séries inexistantes :
+  - `DisqueBientotPlein` filtrait `mountpoint="/host"`. node-exporter tourne
+    bien avec `--path.rootfs=/host`, mais publie le point de montage tel que le
+    système le nomme, c'est-à-dire `/`. Requête : `"result":[]`. La règle ne
+    pouvait **jamais** se déclencher, quel que soit l'état du disque.
+  - `OrdonnanceurArrete` testait `up{job="airflow"} == 0`. Cette cible est
+    statsd-exporter, pas Airflow : l'ordonnanceur pouvait mourir sans que rien
+    ne s'allume. Remplacé par `airflow_scheduler_heartbeat`, métrique vérifiée
+    présente.
+- **Choix :** expressions corrigées, deux règles ajoutées (`ConteneurArrete`,
+  `DagIllisible`), et chaque règle porte désormais en commentaire la manière de
+  vérifier qu'elle n'est pas muette :
+  `curl --get .../api/v1/query --data-urlencode 'query=<expr>'` — une réponse
+  `"result":[]` signale une règle sans effet.
+- **Vérifié :** les 6 règles sont chargées par Prometheus, état `ok`. Le
+  déclenchement réel a été éprouvé en arrêtant un conteneur.
+- **Raison :** une règle d'alerte qui ne s'est jamais déclenchée est
+  indiscernable d'une règle qui ne peut pas se déclencher. C'est le même piège
+  que le contrôle fantôme du D-003, transposé à la supervision : le silence
+  passe pour de la sérénité alors qu'il n'est que de la surdité.
+- **Latence assumée :** `ConteneurArrete` met environ huit minutes à se
+  déclencher — cinq minutes avant que Prometheus considère la série périmée,
+  puis les trois minutes du `for:`. Acceptable pour ce projet, et documenté
+  plutôt que découvert par le jury.
+- **Reste ouvert :** les alertes sont évaluées et visibles dans Grafana, mais
+  pas encore routées vers un canal (courriel ou webhook). À traiter avant la
+  vidéo du Bloc 3.
