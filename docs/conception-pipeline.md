@@ -163,22 +163,62 @@ L'ordre suit la **couverture au grain dossier** mesurée, pas l'intuition.
 > conduit à la sous-investir, alors qu'elle décrit ce que le client **a fait**,
 > pas ce qu'il déclare. C'est la source la plus prédictive.
 
-### 5.2 Job 1 — `installments_payments`
+### 5.2 Job 1 — `installments_payments` : **trois** niveaux d'agrégation, pas deux
 
-Deux variables dérivées à la ligne, puis agrégation par dossier :
+> ⚠️ **Correction du 25/08.** La première version de cette section décrivait un
+> calcul **faux**. L'analyse `bornes_qualite.md` §2 a montré qu'une échéance
+> unique peut être réglée en **plusieurs versements** : 640 905 échéances sont
+> concernées. Les calculer à la ligne inverse le signal de risque.
+
+**Étape 1 — consolider les versements d'une même échéance.** Vérifié sur
+l'intégralité des cas : le montant dû et la date d'échéance sont identiques sur
+toutes les lignes d'une échéance (100 %), et la **somme** des versements couvre
+le montant dû (99,96 %). Prendre le versement le plus élevé ne suffirait que
+dans 35,6 % des cas.
 
 ```
-RETARD_JOURS  = DAYS_ENTRY_PAYMENT - DAYS_INSTALMENT   # > 0 : payé en retard
-TAUX_PAIEMENT = AMT_PAYMENT / AMT_INSTALMENT           # < 1 : paiement partiel
+grouper par (SK_ID_PREV, NUM_INSTALMENT_VERSION, NUM_INSTALMENT_NUMBER) :
+    AMT_INSTALMENT     = first    montant dû, identique sur toutes les lignes
+    DAYS_INSTALMENT    = first    date d'échéance, identique
+    AMT_PAYMENT        = SUM      total réellement versé
+    DAYS_ENTRY_PAYMENT = MAX      date du dernier versement, donc du solde
 ```
 
-Agrégations : `mean`, `max`, `sum`, `std` du retard ; `mean` et `min` du taux de
-paiement ; nombre d'échéances ; nombre et part d'échéances en retard ; retard
-maximal sur les 12 derniers mois.
+**Étape 2 — dériver, sur les échéances consolidées :**
 
-**Attention au grain.** L'agrégation se fait en deux temps :
-`SK_ID_PREV` → puis `SK_ID_CURR`. Agréger directement au dossier donnerait un
-poids plus fort aux crédits comptant beaucoup d'échéances.
+```
+RETARD_JOURS  = DAYS_ENTRY_PAYMENT - DAYS_INSTALMENT   # > 0 : soldé en retard
+TAUX_PAIEMENT = AMT_PAYMENT / AMT_INSTALMENT           # < 1 : soldé partiellement
+```
+
+**Étape 3 — agréger** par `SK_ID_PREV`, puis par `SK_ID_CURR` : `mean`, `max`,
+`sum`, `std` du retard ; `mean` et `min` du taux de paiement ; nombre
+d'échéances ; nombre et part d'échéances en retard ; retard maximal sur les 12
+derniers mois.
+
+#### Ce que coûterait l'oubli de l'étape 1
+
+| Variable | Sans consolidation | Avec consolidation |
+|---|---|---|
+| `TAUX_PAIEMENT` moyen | 0,4958 | **1,0014** |
+| `RETARD_JOURS` moyen | **−3,78 j** (en avance) | **+14,00 j** (en retard) |
+| Nombre d'échéances | 13 605 401 | **12 951 918** |
+
+**Le signe du retard s'inverse.** Un client qui solde son échéance avec
+quatorze jours de retard apparaîtrait comme payant en avance, et un client qui
+règle l'intégralité de sa dette semblerait n'en payer que la moitié — sur la
+source qui couvre 94,1 % des dossiers et porte le plus de signal.
+
+C'est le meilleur argument possible en faveur d'une analyse exploratoire menée
+**avant** l'écriture du pipeline : le code aurait tourné sans erreur, produit des
+variables d'apparence normale, et entraîné un modèle sur un signal inversé.
+
+#### Deux pièges dans la même table
+
+- `AMT_INSTALMENT = 0` sur 290 lignes → division par zéro à protéger.
+- `AMT_PAYMENT` manquant sur 2 905 lignes → l'échéance n'a **jamais** été payée.
+  Ce n'est pas une valeur à imputer, c'est un impayé : un signal de risque à
+  part entière, à conserver comme tel (règle F5).
 
 ### 5.3 Les sept ratios métier
 
