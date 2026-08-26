@@ -99,14 +99,52 @@ corriger une agrégation ne doit pas obliger à réingérer 2,5 Gio.
 |---|---|---|---|
 | 1 | `detecter_fichiers` | Liste les objets de `raw/`, vérifie que les 8 sont présents | **bloque** |
 | 2 | `controler_fraicheur` | Le flux bureau doit dater de moins de 48 h | **bloque** |
-| 3 | `typer_et_dedoublonner` | Types explicites, doublons de clé primaire supprimés | **bloque** |
+| 3 | `typer_et_controler_grain` | Types explicites ; **contrôle** du grain, sans suppression aveugle (voir 4.2) | **bloque** |
 | 4 | `neutraliser_sentinelles` | `DAYS_EMPLOYED = 365243` → `NULL` | **bloque** |
 | 5 | `devier_attributs_sensibles` | Extrait genre et âge vers `audit_equite`, les retire du flux principal | **bloque** |
 | 6 | `pseudonymiser` | Remplace `SK_ID_CURR` par un pseudonyme dans les journaux | avertit |
 | 7 | `rejeter_orphelins` | Écarte les enfants sans parent, journalise le volume | avertit |
 | 8 | `ecrire_clean` | Écrit en Parquet partitionné dans `clean/` | **bloque** |
 
-### 4.2 La tâche 5 est la plus importante du bloc
+### 4.2 Dédoublonner ? Non — contrôler le grain
+
+**Un « supprimer les doublons » aveugle corromprait les données.** L'analyse
+`bornes_qualite.md` a mesuré, sur les sept tables :
+
+| Table | Doublons de grain | Ce que fait le pipeline |
+|---|---|---|
+| `application_train` | 0 | contrôle, aucune suppression |
+| `bureau` | 0 | contrôle |
+| `bureau_balance` | 0 | contrôle |
+| `previous_application` | 0 | contrôle |
+| `POS_CASH_balance` | 0 | contrôle |
+| `credit_card_balance` | 0 | contrôle |
+| `installments_payments` | **653 483** | **consolidation**, surtout pas suppression |
+
+Les 653 483 lignes de `installments_payments` ne sont pas des doublons : ce sont
+des échéances réglées en plusieurs versements (décision D-011). Un
+`drop_duplicates()` sur leur grain **supprimerait 653 483 versements légitimes**,
+ne garderait qu'un versement partiel par échéance, et ferait chuter le taux de
+paiement moyen de 1,00 à 0,50. Le nettoyage aurait fabriqué l'erreur qu'il
+prétendait éviter.
+
+La règle du pipeline est donc :
+
+- **Suppression de lignes strictement identiques** — colonne pour colonne. Zéro
+  aujourd'hui, mais le flux quotidien peut en apporter : une ligne parfaitement
+  identique à une autre n'ajoute aucune information. Toute suppression est
+  **journalisée** ; si le volume dépasse 0,01 %, la tâche alerte.
+- **Contrôle du grain, sans suppression.** Un doublon de grain avec des valeurs
+  différentes n'est pas un déchet à jeter : c'est le signe qu'on a mal compris la
+  table. Le pipeline s'arrête et laisse un humain trancher — exactement ce qui
+  s'est passé le 25/08.
+- **Consolidation explicite** pour `installments_payments`, décrite en §5.2.
+
+> **Le principe à retenir :** on ne nettoie pas ce qu'on n'a pas mesuré. Un
+> `drop_duplicates()` posé « par précaution » sur une table qu'on connaît mal
+> détruit de l'information sans laisser de trace.
+
+### 4.3 La tâche 5 est la plus importante du bloc
 
 C'est elle qui rend vraie la politique P-4. Trois attributs quittent le flux
 principal **avant** tout calcul de variable :
@@ -121,7 +159,7 @@ Après cette tâche, `clean/` **ne contient plus** ces colonnes. Le contrôle C-
 n'a donc plus rien à interdire : la variable n'existe simplement plus dans le
 périmètre du modèle. C'est la différence entre interdire et rendre impossible.
 
-### 4.3 Les orphelins, chiffrés
+### 4.4 Les orphelins, chiffrés
 
 `schema_jointures.md` les a mesurés. Ils sont écartés et **journalisés**, jamais
 silencieusement ignorés :
@@ -299,7 +337,7 @@ seuls les échecs réels remontent.
 `monitoring/regles_alertes.yml`. C'est la règle latente mentionnée en D-110 :
 elle sera vérifiée pour la première fois lors de la démonstration.
 
----
+--- b
 
 ## 8. Conformité RGPD dans le pipeline
 
