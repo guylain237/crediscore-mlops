@@ -26,3 +26,12 @@ evidently>=0.4
 pytest>=8.0
 httpx>=0.27
 ruff>=0.5
+
+# Traitement distribue — jobs d'agregation du pipeline (Bloc 3).
+# Version identique a celle de l'image Airflow : le code teste sur le poste est
+# exactement celui qui tourne sur la VM.
+#
+# ATTENTION : pyspark 3.5.3 declare Python 3.8 a 3.11. Sur 3.13, les workers
+# Python plantent (WinError 10038 sur socket). Le venv de ce depot est donc
+# construit sur Python 3.11 — voir decision D-112.
+pyspark==3.5.3

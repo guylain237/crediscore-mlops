@@ -226,3 +226,32 @@
   la seule preuve.
 - **Réutilisable en soutenance :** la séquence dure cinq minutes et se rejoue à
   volonté. Elle vaut mieux qu'un tableau de bord vert immobile.
+
+## D-112 — 26/08/2026 — Python 3.11 pour Spark, et exécution en conteneur sur le poste
+
+- **Contexte :** premier essai d'exécution de Spark avant d'écrire les jobs. Trois
+  obstacles se sont succédé, chacun invisible tant qu'on n'exécute pas.
+- **Obstacle 1 — la version de Python.** Le venv du dépôt était en 3.13.5 ;
+  PySpark 3.5.3 déclare 3.8 à 3.11. Les workers Python plantaient sur
+  `WinError 10038`. **Conséquence majeure : l'image Airflow était en
+  `python3.12`, elle aussi hors plage.** Les jobs auraient probablement échoué
+  dans le conteneur, sur la VM, en pleine journée de Bloc 3. Venv et image
+  alignés sur **3.11**.
+- **Obstacle 2 — l'interpréteur des workers.** Spark lance ses processus Python
+  avec le `python` du `PATH`, qui n'est pas celui du venv — ici celui du
+  Microsoft Store. Corrigé **dans le code** et non dans le shell :
+  `commun.py` impose `PYSPARK_PYTHON = sys.executable` dès l'import, avant tout
+  chargement de pyspark.
+- **Obstacle 3 — l'écriture sous Windows.** Spark ne peut pas écrire de fichiers
+  sans `winutils.exe`, binaire Hadoop distribué de façon non officielle.
+  **Option écartée :** installer un exécutable non signé issu d'un dépôt tiers
+  serait indéfendable dans un projet dont le sujet est la sécurité des données.
+  **Choix :** exécuter les jobs dans la **même image que la VM**, via
+  `scripts/executer-job.ps1`. Linux, aucun binaire douteux, et le code testé sur
+  le poste est littéralement celui qui tournera en production.
+- **Vérifié le 26/08 :** dans le conteneur, lecture de 200 000 lignes réelles,
+  écriture Parquet, relecture avec les types conservés.
+- **Raison de fond :** trois incidents en une semaine — buildx, les règles
+  d'alerte muettes, et celui-ci — ont la même origine : une version choisie
+  parce qu'elle est récente plutôt que parce qu'elle est supportée. La règle
+  s'étend désormais aux interpréteurs, pas seulement aux outils.

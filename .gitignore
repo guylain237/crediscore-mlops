@@ -27,6 +27,10 @@ tfplan
 # par ailleurs du côté Python.
 
 # Données
+# Sorties locales du pipeline (zones clean/ et curated/ en developpement).
+# Elles se regenerent en rejouant les jobs ; leur equivalent de production vit
+# dans le data lake S3.
+/donnees_pipeline/
 # La barre oblique initiale ANCRE le motif à la racine : sans elle, « data/ »
 # ignorerait aussi un futur pipelines/data/ ou api/data/, qui sont du code.
 *.csv
