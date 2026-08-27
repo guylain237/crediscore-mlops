@@ -20,9 +20,55 @@ locals {
   # compte) : le suffixer par le numéro de compte évite toute collision.
   nom_datalake = "${var.nom_projet}-datalake-${data.aws_caller_identity.courant.account_id}"
 
-  # Documentaire : la liste sert aux sorties (outputs.tf), pas à créer quoi que
-  # ce soit. Elle rend le contrat des trois zones explicite dans le code.
-  zones = ["raw/", "clean/", "curated/"]
+  # CONTRAT DES ZONES — déclaration unique dont tout le reste découle.
+  #
+  # S3 n'ayant pas de dossiers, une zone n'existe que par les droits qu'on lui
+  # accorde. Cette carte est donc la seule source de vérité : la politique IAM
+  # (iam.tf) et les sorties (outputs.tf) en sont dérivées. Ajouter une zone ici
+  # suffit ; il devient impossible d'accorder un droit sur une zone non
+  # déclarée, ou de déclarer une zone que personne ne peut atteindre.
+  #
+  # Niveaux d'accès :
+  #   lecture   GetObject
+  #   ecriture  GetObject + PutObject + DeleteObject
+  #   ajout     PutObject SEUL — on écrit, on ne relit ni n'efface
+  #   aucun     pas d'accès
+  zones = {
+    "raw" = {
+      objet = "Exports bruts des systèmes sources, immuables"
+      vm    = "lecture"
+      api   = "aucun"
+    }
+    "reference" = {
+      objet = "Dictionnaire des colonnes et tables de correspondance"
+      vm    = "lecture"
+      api   = "aucun"
+    }
+    "clean" = {
+      objet = "Données typées, dédoublonnées, attributs sensibles déviés"
+      vm    = "ecriture"
+      api   = "aucun"
+    }
+    "curated" = {
+      objet = "Variables agrégées au grain du dossier"
+      vm    = "ecriture"
+      api   = "lecture"
+    }
+    "mlflow" = {
+      objet = "Artefacts MLflow : modèles, graphiques SHAP, rapports d'équité"
+      vm    = "ecriture"
+      api   = "aucun"
+    }
+    "audit" = {
+      # Le seul « ajout » du projet, et ce n'est pas un oubli : un journal
+      # d'audit doit pouvoir être écrit, jamais relu ni effacé par celui qui
+      # l'écrit. C'est la condition pour qu'il fasse foi en cas de contestation
+      # d'une décision de crédit (politique P-7, AI Act art. 12).
+      objet = "Journal d'audit des décisions de scoring"
+      vm    = "aucun"
+      api   = "ajout"
+    }
+  }
 }
 
 # ─────────────────────────────────────────────────────────────────────────────

@@ -35,7 +35,12 @@ from pyspark.sql import DataFrame, SparkSession
 # Les mêmes noms qu'en production. En local, ils désignent des sous-dossiers ;
 # sur la VM, les préfixes du bucket S3. Le code des jobs ne fait jamais la
 # différence : il demande « la zone raw », pas « tel chemin ».
-ZONES = ("raw", "clean", "curated")
+# Les six zones déclarées dans infra/datalake.tf. Le pipeline n'écrit que dans
+# `clean` et `curated` ; `reference` lui sert à lire le dictionnaire des
+# colonnes, `mlflow` appartient au serveur de suivi, et `audit` n'est
+# accessible qu'au rôle de l'API — en écriture seule, pour que le journal des
+# décisions ne puisse pas être altéré par celui qui l'alimente.
+ZONES = ("raw", "reference", "clean", "curated", "mlflow", "audit")
 
 # Emplacements hors S3. Surchargeables par variable d'environnement : le même
 # module sert sur le poste (chemins Windows), dans le conteneur de

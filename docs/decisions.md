@@ -255,3 +255,31 @@
   d'alerte muettes, et celui-ci — ont la même origine : une version choisie
   parce qu'elle est récente plutôt que parce qu'elle est supportée. La règle
   s'étend désormais aux interpréteurs, pas seulement aux outils.
+
+## D-113 — 26/08/2026 — Un contrat de zones unique, dont la politique IAM est dérivée
+
+- **Contexte :** en cherchant où déposer le dictionnaire des colonnes, constat
+  que **cinq endroits énumèrent les zones du data lake, avec trois réponses
+  différentes** : la politique IAM en autorisait cinq préfixes, `local.zones`
+  en déclarait trois, `commun.py` trois, le diagramme d'architecture quatre.
+  Un sixième préfixe, `audit/`, n'apparaissait que dans la politique de l'API
+  et dans aucune documentation.
+- **Options :** corriger chaque endroit à la main ; supprimer les zones
+  inutilisées ; **déclarer les zones une seule fois et en dériver le reste**.
+- **Choix :** `local.zones` devient une carte — objet de la zone, droit de la VM,
+  droit de l'API — et les deux politiques IAM en sont calculées par
+  compréhension. Plus aucune liste de préfixes n'est écrite à la main.
+  `commun.py` et `docs/architecture.md` sont alignés sur les six zones.
+- **Raison :** une permission accordée sur une zone que personne n'utilise est un
+  droit dormant, exactement ce qu'un audit de moindre privilège relève. À
+  l'inverse, une zone documentée sans droit correspondant est une promesse vide.
+  Dériver la politique du contrat rend les deux impossibles : ajouter une zone
+  est un seul geste, et l'oublier quelque part n'est plus faisable.
+- **Effet secondaire précieux :** l'exercice a mis au jour que `audit/` est en
+  **écriture seule** — ni lecture, ni suppression — ce qui empêche l'API de
+  relire ou d'effacer le journal des décisions qu'elle alimente. C'est la
+  propriété qui permet à ce journal de faire foi lors d'une contestation
+  (art. 22 RGPD, art. 12 AI Act), et elle n'était documentée nulle part.
+- **Vérifié :** `terraform validate` passe, les 7 tests du dépôt passent. Le
+  `plan` reste à jouer à la prochaine session AWS : les droits effectifs sont
+  inchangés, seule leur expression l'est.

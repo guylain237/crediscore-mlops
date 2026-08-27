@@ -42,6 +42,16 @@ resource "aws_iam_role" "vm_traitement" {
   assume_role_policy = data.aws_iam_policy_document.confiance_ec2.json
 }
 
+locals {
+  # Dérivé du contrat des zones (datalake.tf). Aucune liste de préfixes n'est
+  # réécrite à la main ici : la politique ne peut donc pas diverger du contrat.
+  vm_lecture  = [for zone, contrat in local.zones : zone if contrat.vm == "lecture"]
+  vm_ecriture = [for zone, contrat in local.zones : zone if contrat.vm == "ecriture"]
+  vm_visibles = [for zone, contrat in local.zones : zone if contrat.vm != "aucun"]
+  api_lecture = [for zone, contrat in local.zones : zone if contrat.api == "lecture"]
+  api_ajout   = [for zone, contrat in local.zones : zone if contrat.api == "ajout"]
+}
+
 data "aws_iam_policy_document" "droits_traitement" {
   # Lister le bucket est une action de NIVEAU BUCKET : elle ne peut pas être
   # restreinte à un préfixe par la ressource, on la restreint par condition.
@@ -52,39 +62,24 @@ data "aws_iam_policy_document" "droits_traitement" {
     condition {
       test     = "StringLike"
       variable = "s3:prefix"
-      values   = ["raw/*", "clean/*", "curated/*", "reference/*", "mlflow/*"]
+      values   = [for zone in local.vm_visibles : "${zone}/*"]
     }
   }
 
+  # Zones en lecture seule : les données sources restent infalsifiables, y
+  # compris par la machine qui les traite.
   statement {
-    sid     = "LireLesDonneesBrutes"
-    actions = ["s3:GetObject"]
-    resources = [
-      "${aws_s3_bucket.datalake.arn}/raw/*",
-      "${aws_s3_bucket.datalake.arn}/reference/*",
-    ]
+    sid       = "LireLesZonesSources"
+    actions   = ["s3:GetObject"]
+    resources = [for zone in local.vm_lecture : "${aws_s3_bucket.datalake.arn}/${zone}/*"]
   }
 
+  # Zones que le pipeline produit : il doit pouvoir les relire, les réécrire
+  # — l'idempotence l'exige — et les nettoyer.
   statement {
-    sid     = "EcrireLesZonesIntermediaires"
-    actions = ["s3:GetObject", "s3:PutObject", "s3:DeleteObject"]
-    resources = [
-      "${aws_s3_bucket.datalake.arn}/clean/*",
-      "${aws_s3_bucket.datalake.arn}/curated/*",
-    ]
-  }
-
-  # Artefacts MLflow : modèles entraînés, graphiques SHAP, rapports d'équité.
-  # Ils vivent dans le data lake plutôt que sur le disque de la VM, pour deux
-  # raisons de fond : ils survivent à l'extinction du soir (politique P-9), et
-  # ils héritent du chiffrement et du versionnage du bucket — ce qui rend la
-  # piste d'audit d'un modèle aussi solide que celle des données.
-  statement {
-    sid     = "PublierLesArtefactsMLflow"
-    actions = ["s3:GetObject", "s3:PutObject", "s3:DeleteObject"]
-    resources = [
-      "${aws_s3_bucket.datalake.arn}/mlflow/*",
-    ]
+    sid       = "EcrireLesZonesProduites"
+    actions   = ["s3:GetObject", "s3:PutObject", "s3:DeleteObject"]
+    resources = [for zone in local.vm_ecriture : "${aws_s3_bucket.datalake.arn}/${zone}/*"]
   }
 
   # La VM peut endosser le rôle de l'API — utile lorsque le conteneur de
@@ -147,20 +142,20 @@ resource "aws_iam_role" "api_scoring" {
 
 data "aws_iam_policy_document" "droits_api" {
   statement {
-    sid       = "ListerCuratedSeulement"
+    sid       = "ListerLesZonesAutorisees"
     actions   = ["s3:ListBucket"]
     resources = [aws_s3_bucket.datalake.arn]
     condition {
       test     = "StringLike"
       variable = "s3:prefix"
-      values   = ["curated/*"]
+      values   = [for zone in local.api_lecture : "${zone}/*"]
     }
   }
 
   statement {
     sid       = "LireLesVariablesExploitables"
     actions   = ["s3:GetObject"]
-    resources = ["${aws_s3_bucket.datalake.arn}/curated/*"]
+    resources = [for zone in local.api_lecture : "${aws_s3_bucket.datalake.arn}/${zone}/*"]
   }
 
   # Écriture SEULE : pas de GetObject, pas de DeleteObject. Un journal d'audit
@@ -169,7 +164,7 @@ data "aws_iam_policy_document" "droits_api" {
   statement {
     sid       = "EcrireLeJournalDAudit"
     actions   = ["s3:PutObject"]
-    resources = ["${aws_s3_bucket.datalake.arn}/audit/*"]
+    resources = [for zone in local.api_ajout : "${aws_s3_bucket.datalake.arn}/${zone}/*"]
   }
 }
 

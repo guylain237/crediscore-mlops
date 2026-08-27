@@ -22,9 +22,11 @@ flowchart TB
     subgraph aws["AWS — eu-north-1, réseau privé"]
         subgraph lac["Data lake S3 — chiffré, versionné, accès public bloqué"]
             Z1["raw/<br/>lecture seule"]
+            Z5["reference/<br/>lecture seule"]
             Z2["clean/"]
             Z3["curated/"]
             Z4["mlflow/<br/>artefacts"]
+            Z6["audit/<br/>écriture seule"]
         end
 
         subgraph vm["VM de traitement — EC2 t3.large, disque chiffré"]
@@ -54,7 +56,9 @@ flowchart TB
     PG --> ML
     PG --> API
     ML --> Z4
+    Z5 --> AF
     API --> POS
+    API -.décisions.-> Z6
     AF -.métriques.-> PR
     vm -.métriques.-> PR
     PR --> GR
@@ -62,7 +66,7 @@ flowchart TB
     classDef zone fill:#e8f0fe,stroke:#1a56db,color:#1e3a5f
     classDef service fill:#ffffff,stroke:#1a56db,color:#1e3a5f
     classDef externe fill:#f3f4f6,stroke:#6b7280,color:#374151
-    class Z1,Z2,Z3,Z4 zone
+    class Z1,Z2,Z3,Z4,Z5,Z6 zone
     class AF,SP,PG,ML,API,PR,GR service
     class S1,S2,S3,POS externe
 ```
@@ -73,12 +77,44 @@ flowchart TB
 
 | Couche | Composant | Rôle | Pourquoi séparé |
 |---|---|---|---|
-| **Stockage** | S3, 4 préfixes | Données brutes, nettoyées, prêtes, artefacts | Chaque zone a ses propres droits : `raw/` est en lecture seule même pour la VM, ce qui rend la donnée source infalsifiable |
+| **Stockage** | S3, **6 zones** | Brutes, référence, nettoyées, prêtes, artefacts, audit | Chaque zone a ses propres droits — voir §2 bis. `raw/` est en lecture seule même pour la VM ; `audit/` en écriture seule pour l'API |
 | **Orchestration** | Airflow | Enchaîne ingestion → agrégation → publication | Reprise sur erreur et alertes, sans intervention manuelle (exigence Bloc 3) |
 | **Traitement** | Spark en mode local | Agrège 58 M de lignes en variables par dossier | Même code qu'un cluster ; seul le maître change à l'échelle cible |
 | **Service de variables** | PostgreSQL | Feature store + entrepôt en étoile | Définitions identiques à l'entraînement et au scoring — élimine le *train/serving skew* |
 | **Suivi de modèles** | MLflow | Expériences, métriques, registre | Rend le réentraînement reproductible (exigence Bloc 4) |
 | **Supervision** | Prometheus + Grafana | Métriques, seuils, alertes | Détecter une panne avant l'utilisateur |
+
+---
+
+## 2 bis. Les six zones du data lake
+
+Une zone n'existe, sur S3, que par les droits qu'on lui accorde — le service n'a
+pas de dossiers. Les zones sont donc déclarées **une seule fois**, dans
+`infra/datalake.tf`, et la politique IAM en est **dérivée** : il est impossible
+d'accorder un droit sur une zone non déclarée, ou de déclarer une zone que
+personne ne peut atteindre.
+
+| Zone | Contenu | VM de traitement | API de scoring |
+|---|---|---|---|
+| `raw/` | Exports bruts des systèmes sources | lecture | — |
+| `reference/` | Dictionnaire des colonnes | lecture | — |
+| `clean/` | Données typées, attributs sensibles déviés | lecture-écriture | — |
+| `curated/` | Variables agrégées au grain du dossier | lecture-écriture | lecture |
+| `mlflow/` | Modèles, graphiques SHAP, rapports d'équité | lecture-écriture | — |
+| `audit/` | Journal des décisions de scoring | — | **écriture seule** |
+
+**Deux lignes de ce tableau méritent d'être lues attentivement.**
+
+`raw/` est en lecture seule **même pour la machine qui traite les données**. Un
+bug du pipeline ne peut donc pas corrompre la donnée source. Ce n'est pas une
+convention de développement, c'est une politique IAM — et elle se démontre :
+un `aws s3 cp` vers `raw/` depuis la VM renvoie `AccessDenied`.
+
+`audit/` est en **écriture seule** : ni lecture, ni suppression. L'API peut y
+déposer chaque décision de scoring, mais ne peut ni la relire ni l'effacer.
+C'est précisément ce qui permet à ce journal de faire foi lorsqu'un demandeur
+conteste un refus — celui qui écrit la preuve ne peut pas la réécrire
+(politique P-7, AI Act art. 12).
 
 ---
 

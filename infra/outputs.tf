@@ -14,8 +14,18 @@ output "datalake_bucket" {
 }
 
 output "datalake_zones" {
-  description = "URI des trois zones — utiles pour les DAGs Airflow et les jobs Spark."
-  value       = [for zone in local.zones : "s3://${aws_s3_bucket.datalake.id}/${zone}"]
+  description = "Zones du data lake, avec leur objet et les droits de chaque rôle."
+  value = {
+    for zone, contrat in local.zones :
+    zone => {
+      uri  = "s3://${aws_s3_bucket.datalake.id}/${zone}/"
+      role = contrat.objet
+      acces = join(" · ", compact([
+        contrat.vm != "aucun" ? "VM : ${contrat.vm}" : "",
+        contrat.api != "aucun" ? "API : ${contrat.api}" : "",
+      ]))
+    }
+  }
 }
 
 output "region" {
