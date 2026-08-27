@@ -97,7 +97,7 @@ corriger une agrégation ne doit pas obliger à réingérer 2,5 Gio.
 
 | # | Tâche | Ce qu'elle fait | Échec = |
 |---|---|---|---|
-| 1 | `detecter_fichiers` | Liste les objets de `raw/`, vérifie que les 8 sont présents | **bloque** |
+| 1 | `detecter_fichiers` | Vérifie la présence des **huit fichiers nommément attendus** dans `raw/` — la zone en contient d'autres, dont le dictionnaire des colonnes | **bloque** |
 | 2 | `controler_fraicheur` | Le flux bureau doit dater de moins de 48 h | **bloque** |
 | 3 | `typer_et_controler_grain` | Types explicites ; **contrôle** du grain, sans suppression aveugle (voir 4.2) | **bloque** |
 | 4 | `neutraliser_sentinelles` | `DAYS_EMPLOYED = 365243` → `NULL` | **bloque** |

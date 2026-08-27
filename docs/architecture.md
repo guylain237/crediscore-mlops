@@ -22,7 +22,7 @@ flowchart TB
     subgraph aws["AWS — eu-north-1, réseau privé"]
         subgraph lac["Data lake S3 — chiffré, versionné, accès public bloqué"]
             Z1["raw/<br/>lecture seule"]
-            Z5["reference/<br/>lecture seule"]
+            Z5["reference/<br/>archive d'origine"]
             Z2["clean/"]
             Z3["curated/"]
             Z4["mlflow/<br/>artefacts"]
@@ -96,8 +96,8 @@ personne ne peut atteindre.
 
 | Zone | Contenu | VM de traitement | API de scoring |
 |---|---|---|---|
-| `raw/` | Exports bruts des systèmes sources | lecture | — |
-| `reference/` | Dictionnaire des colonnes | lecture | — |
+| `raw/` | Exports bruts des systèmes sources **et dictionnaire des colonnes** | lecture | — |
+| `reference/` | **Archive d'origine** — preuve d'intégrité | lecture | — |
 | `clean/` | Données typées, attributs sensibles déviés | lecture-écriture | — |
 | `curated/` | Variables agrégées au grain du dossier | lecture-écriture | lecture |
 | `mlflow/` | Modèles, graphiques SHAP, rapports d'équité | lecture-écriture | — |
@@ -115,6 +115,13 @@ déposer chaque décision de scoring, mais ne peut ni la relire ni l'effacer.
 C'est précisément ce qui permet à ce journal de faire foi lorsqu'un demandeur
 conteste un refus — celui qui écrit la preuve ne peut pas la réécrire
 (politique P-7, AI Act art. 12).
+
+`reference/` conserve l'**archive d'origine**, telle qu'elle a été reçue et
+jamais décompressée. Ce n'est pas une sauvegarde de confort : son empreinte
+permet d'établir que les fichiers de `raw/` n'ont pas été altérés entre la
+réception et le traitement. C'est la réponse à une question qu'un auditeur pose
+naturellement lorsque la donnée source commande des décisions de crédit — *comment
+savez-vous que ce que vous traitez est bien ce que vous avez reçu ?*
 
 ---
 

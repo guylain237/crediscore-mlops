@@ -35,12 +35,25 @@ locals {
   #   aucun     pas d'accès
   zones = {
     "raw" = {
-      objet = "Exports bruts des systèmes sources, immuables"
+      # Contient aussi le dictionnaire des colonnes : il est arrivé avec le jeu
+      # de données et vit donc avec lui. Conséquence pour le pipeline : le
+      # contrôle de complétude énumère les huit fichiers attendus au lieu de
+      # compter les objets présents.
+      objet = "Exports bruts des systèmes sources et dictionnaire des colonnes"
       vm    = "lecture"
       api   = "aucun"
     }
     "reference" = {
-      objet = "Dictionnaire des colonnes et tables de correspondance"
+      # L'archive d'origine, telle qu'elle a été reçue, jamais décompressée ici.
+      #
+      # Ce n'est pas une simple sauvegarde : c'est une PREUVE D'ORIGINE. Son
+      # empreinte permet d'établir que les CSV de `raw/` n'ont pas été altérés
+      # entre la réception et le traitement — question qu'un auditeur pose
+      # naturellement quand la donnée source commande des décisions de crédit.
+      #
+      # Le pipeline ne la lit jamais ; la VM y a accès en lecture pour pouvoir
+      # recalculer cette empreinte lors d'une vérification.
+      objet = "Archive d'origine du jeu de données — preuve d'intégrité"
       vm    = "lecture"
       api   = "aucun"
     }

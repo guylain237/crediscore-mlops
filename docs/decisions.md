@@ -283,3 +283,28 @@
 - **Vérifié :** `terraform validate` passe, les 7 tests du dépôt passent. Le
   `plan` reste à jouer à la prochaine session AWS : les droits effectifs sont
   inchangés, seule leur expression l'est.
+
+## D-114 — 28/08/2026 — Le dictionnaire avec les données, l'archive comme preuve
+
+- **Contexte :** où déposer les deux fichiers présents en local mais absents du
+  data lake — `HomeCredit_columns_description.csv` (219 colonnes documentées) et
+  l'archive d'origine `home-credit-default-risk.zip`.
+- **Choix :**
+  - **Le dictionnaire va dans `raw/`**, avec les huit fichiers. Il est arrivé
+    avec le jeu de données, il vit avec lui. Conséquence assumée : le contrôle
+    de complétude du pipeline énumère les huit fichiers attendus au lieu de
+    compter les objets présents.
+  - **L'archive va dans `reference/`.** Ce n'est pas une sauvegarde de confort :
+    son empreinte permet d'établir que les CSV de `raw/` n'ont pas été altérés
+    entre la réception et le traitement.
+- **Raison :** la question *« comment savez-vous que ce que vous traitez est bien
+  ce que vous avez reçu ? »* se pose naturellement quand la donnée source
+  commande des décisions de crédit. Conserver l'archive intacte y répond, et
+  transforme une duplication apparente en contrôle d'intégrité. Elle se
+  rattache à la colonne `empreinte_donnees` du journal des publications.
+- **Ce que le dictionnaire apporte :** 219 descriptions de colonnes, en clair.
+  Elles alimenteront `feature_store.registre_variables.description` sans saisie
+  manuelle — c'est la règle F4 (*explicable à un client*) rendue applicable, et
+  le lien entre un facteur SHAP et sa définition.
+- **Écart précédent résorbé :** `reference/` n'était plus une zone autorisée mais
+  vide, ce qu'un audit de moindre privilège aurait relevé (D-113).
