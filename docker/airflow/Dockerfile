@@ -25,3 +25,29 @@ USER airflow
 # ne casse l'ordonnanceur — c'est la méthode recommandée en amont.
 COPY airflow/requirements.txt /tmp/requirements.txt
 RUN pip install --no-cache-dir -r /tmp/requirements.txt
+
+# CONNECTEUR S3.
+#
+# PySpark n'embarque PAS de quoi lire s3a://. Sans ces deux bibliothèques, tout
+# job pointant vers le data lake échoue sur un ClassNotFoundException — et
+# l'échec ne survient qu'à l'exécution, jamais à l'écriture du code.
+#
+# Les versions ne sont pas au choix : hadoop-aws doit correspondre EXACTEMENT au
+# Hadoop embarqué par PySpark (vérifié dans l'image : hadoop-client 3.3.4), et le
+# SDK AWS à celui dont cette version de hadoop-aws dépend. Un écart d'une version
+# mineure suffit à produire des erreurs de méthode introuvable.
+#
+# Les jars sont intégrés à l'image plutôt que téléchargés au lancement par
+# spark.jars.packages : un job de production ne doit pas dépendre d'un dépôt Maven
+# joignable, et la version doit être figée comme le reste.
+ARG VERSION_HADOOP=3.3.4
+ARG VERSION_SDK_AWS=1.12.262
+
+ENV MAVEN=https://repo1.maven.org/maven2
+ENV JARS=/home/airflow/.local/lib/python3.11/site-packages/pyspark/jars
+
+RUN curl -fsSL -o "${JARS}/hadoop-aws-${VERSION_HADOOP}.jar" \
+      "${MAVEN}/org/apache/hadoop/hadoop-aws/${VERSION_HADOOP}/hadoop-aws-${VERSION_HADOOP}.jar" \
+ && curl -fsSL -o "${JARS}/aws-java-sdk-bundle-${VERSION_SDK_AWS}.jar" \
+      "${MAVEN}/com/amazonaws/aws-java-sdk-bundle/${VERSION_SDK_AWS}/aws-java-sdk-bundle-${VERSION_SDK_AWS}.jar" \
+ && ls -1 "${JARS}" | grep -E "hadoop-aws|aws-java-sdk"
