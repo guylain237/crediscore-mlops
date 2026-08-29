@@ -2,6 +2,13 @@
 apache-airflow-providers-amazon==9.1.0
 boto3>=1.35
 
+# pyOpenSSL doit suivre cryptography, sans quoi `import boto3` echoue sur
+# `AttributeError: module 'lib' has no attribute 'GEN_EMAIL'`. L'image
+# embarquait cryptography 49 et pyOpenSSL 24.3, incompatibles — et l'erreur ne
+# se manifeste qu'au chargement du DAG, jamais a l'installation. Verifie le
+# 29/08/2026 : pyOpenSSL 26.4 rend boto3 importable.
+pyOpenSSL>=26.0
+
 # Feature store PostgreSQL
 psycopg2-binary>=2.9
 apache-airflow-providers-postgres==5.14.0
