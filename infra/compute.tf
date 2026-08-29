@@ -64,9 +64,28 @@ resource "aws_instance" "traitement" {
   # requête HTTP. `http_tokens = "required"` impose un jeton signé et ferme
   # cette porte. Détail technique, conséquence majeure.
   metadata_options {
-    http_endpoint               = "enabled"
-    http_tokens                 = "required"
-    http_put_response_hop_limit = 1
+    http_endpoint = "enabled"
+
+    # IMDSv2 obligatoire : un jeton signe est exige avant toute lecture. Sans
+    # cela, une faille de type SSRF dans une application web de la VM
+    # permettrait de lire les identifiants du role IAM par une simple requete
+    # HTTP. C'est la protection principale, et elle est conservee.
+    http_tokens = "required"
+
+    # DEUX sauts, et non un. Mesure le 29/08/2026 : depuis l'hote, le service
+    # de metadonnees repond ; depuis un CONTENEUR, il renvoie 000. Le reseau
+    # Docker ajoute un saut, et une limite a 1 le rejette.
+    #
+    # Consequence concrete : avec une limite a 1, Spark ne peut pas obtenir les
+    # identifiants du role et tout acces au data lake echoue sur
+    # "Unable to load AWS credentials from any provider in the chain".
+    #
+    # Le compromis est assume. Passer a 2 elargit legerement la surface d'une
+    # SSRF — un conteneur compromis peut desormais joindre le service. Mais
+    # l'alternative serait de stocker des cles d'acces dans les conteneurs,
+    # ce qui est franchement pire : une cle fuit durablement, un jeton
+    # d'instance expire et reste lie a la machine.
+    http_put_response_hop_limit = 2
   }
 
   # Script exécuté une seule fois, au tout premier démarrage : installation de

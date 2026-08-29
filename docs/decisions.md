@@ -308,3 +308,34 @@
   le lien entre un facteur SHAP et sa définition.
 - **Écart précédent résorbé :** `reference/` n'était plus une zone autorisée mais
   vide, ce qu'un audit de moindre privilège aurait relevé (D-113).
+
+## D-115 — 29/08/2026 — Le pipeline lit enfin S3 : trois briques manquaient
+
+- **Contexte :** les sept jobs d'agregation tournaient en conteneur local, sur
+  les copies de `input/`. `commun.py` basculait bien sur `s3a://` des que
+  `CREDISCORE_BUCKET` etait renseigne, mais cette bascule **n'avait jamais ete
+  executee**. Question posee par l'utilisateur : le pipeline ne devait-il pas
+  lire directement AWS ? Si, et c'est ce qui a revele trois defauts en cascade.
+- **Defaut 1 — le connecteur S3 absent.** PySpark n'embarque pas de quoi lire
+  `s3a://`. Tout job pointant vers le data lake aurait echoue sur un
+  `ClassNotFoundException`. Corrige : `hadoop-aws` 3.3.4 et le SDK AWS 1.12.262
+  integres a l'image, versions alignees sur le Hadoop embarque — verifie dans
+  l'image, pas suppose.
+- **Defaut 2 — la limite de sauts IMDS.** `http_put_response_hop_limit = 1`
+  empechait tout conteneur d'atteindre le service de metadonnees : depuis
+  l'hote le role repondait, depuis un conteneur le service renvoyait 000.
+  Spark ne pouvait donc obtenir aucun identifiant. Porte a 2.
+- **Le compromis, assume :** deux sauts elargissent legerement la surface d'une
+  SSRF. Mais IMDSv2 reste obligatoire, et l'alternative — stocker des cles dans
+  les conteneurs — est franchement pire : une cle fuit durablement, un jeton
+  d'instance expire et reste lie a la machine.
+- **Verifie le 29/08 sur la VM**, en conditions de production, sans aucune cle :
+  lecture de `raw/` (50 000 lignes, 122 colonnes), ecriture dans `curated/`,
+  relecture depuis S3, et **ecriture dans `raw/` refusee** —
+  `AccessDenied ... no identity-based policy allows the s3:PutObject action`.
+- **Ce que l'episode enseigne :** quatre defauts de ce projet n'apparaissent
+  qu'a l'execution — l'apostrophe refusee par AWS, buildx manquant, le
+  connecteur S3, la limite de sauts. Aucun n'etait visible par `validate`,
+  `ruff` ou une relecture. **Les controles statiques valident la forme, jamais
+  le comportement.** Le seul remede est d'executer dans les conditions reelles,
+  et le plus tot possible.
