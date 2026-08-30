@@ -20,6 +20,7 @@ from pyspark.sql import functions as F
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import commun
+import pseudonyme
 
 # Un an d'historique. Les jours sont negatifs et comptes depuis la demande,
 # donc les 12 derniers mois sont les echeances dont le jour est superieur
@@ -178,8 +179,10 @@ def main():
 
     print()
     print("Apercu sur trois dossiers :")
-    dossiers.select(
-        "SK_ID_CURR",
+    # On affiche le pseudonyme et non l'identifiant reel : ce texte finit dans
+    # les journaux Airflow, qui sont moins proteges que les donnees (C-7).
+    pseudonyme.ajouter_pseudonyme(dossiers).select(
+        "PSEUDO",
         "INSTAL_NB_CREDITS",
         "INSTAL_NB_ECHEANCES",
         F.round("INSTAL_RETARD_JOURS_MEAN", 2).alias("RETARD_MOYEN"),
