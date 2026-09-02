@@ -92,7 +92,10 @@ jobs:
       - name: Installer Terraform
         uses: hashicorp/setup-terraform@v3
         with:
-          terraform_version: "1.9.8"
+          # Doit satisfaire le required_version de infra/providers.tf (>= 1.10).
+          # La version 1.9.8 y avait ete ecrite de memoire : l'init a echoue
+          # des le premier passage.
+          terraform_version: "1.15.8"
 
       - name: Formatage
         run: terraform -chdir=infra fmt -check -recursive

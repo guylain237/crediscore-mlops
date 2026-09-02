@@ -27,7 +27,11 @@ def test_interpreteur_est_celui_du_venv_du_depot() -> None:
 def test_dependances_cles_installees() -> None:
     import importlib.util
 
-    requis = ["fastapi", "uvicorn", "pydantic", "lightgbm", "shap", "psycopg", "evidently"]
+    # Cette liste doit suivre requirements.txt. Elle contenait encore fastapi,
+    # lightgbm et shap apres le depart de l'API vers crediscore-ml : le test
+    # passait en local, ou ces paquets restaient installes, et n'a echoue que
+    # sur la machine vierge de l'integration continue.
+    requis = ["pandas", "numpy", "psycopg", "sqlalchemy", "evidently", "pyspark"]
     manquants = [m for m in requis if importlib.util.find_spec(m) is None]
     assert not manquants, (
         f"Modules manquants : {', '.join(manquants)}. "
