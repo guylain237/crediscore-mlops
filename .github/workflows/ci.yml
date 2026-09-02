@@ -1,0 +1,138 @@
+# Intégration continue — dépôt n°2 (industrialisation)
+#
+# Ce dépôt ne contient presque pas de code applicatif : il contient de
+# l'infrastructure, des jobs de traitement et des descripteurs de conteneurs.
+# Une CI qui se contenterait de lancer `pytest` ne vérifierait donc presque
+# rien.
+#
+# Elle vérifie ici les quatre choses qui cassent réellement en production :
+#
+#   1. le code Python des jobs et des DAGs est propre et testé ;
+#   2. le Terraform est formaté, valide, et ses descriptions passent le
+#      contrôle né de l'incident du 22/08 (une apostrophe dans une description
+#      de groupe de sécurité fait échouer l'apply au 13ᵉ objet sur 22) ;
+#   3. la pile docker-compose est cohérente — c'est ce qui aurait signalé un
+#      service mal branché avant de le découvrir sur la VM ;
+#   4. les DAGs Airflow s'analysent — un DAG qui ne se parse pas n'apparaît
+#      jamais dans l'interface, et rien ne prévient.
+#
+# Aucune étape n'exige d'identifiants AWS. Une CI qui a besoin de secrets pour
+# ses vérifications de base ne tourne pas sur les contributions extérieures,
+# donc ne tourne pas quand elle est le plus utile.
+
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch: # déclenchement manuel, utile pour la démonstration vidéo
+
+jobs:
+  python:
+    name: Qualité et tests Python
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Récupérer le dépôt
+        uses: actions/checkout@v4
+
+      - name: Installer Python 3.11
+        # 3.11 et pas plus récent : pyspark 3.5.3 déclare 3.8 à 3.11, et sur
+        # 3.13 les workers Python meurent d'une erreur de socket (décision
+        # D-112). Le runner doit être la même version que l'image Airflow.
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: requirements.txt
+
+      - name: Créer l'environnement virtuel du dépôt
+        run: python -m venv .venv
+
+      - name: Installer les dépendances
+        run: .venv/bin/python -m pip install --upgrade pip -r requirements.txt
+
+      - name: Qualité du code (ruff)
+        run: .venv/bin/python -m ruff check pipelines tests
+
+      - name: Suite de tests
+        run: .venv/bin/python -m pytest -q
+
+      - name: "Les DAGs Airflow s'analysent"
+        # Un DAG qui lève à l'import n'apparaît pas dans l'interface Airflow,
+        # et le scheduler ne dit rien d'utile. On le découvrirait en constatant
+        # qu'un traitement quotidien ne s'est jamais lancé.
+        run: |
+          .venv/bin/python -m pip install "apache-airflow==2.10.5" \
+            --constraint "https://raw.githubusercontent.com/apache/airflow/constraints-2.10.5/constraints-3.11.txt"
+          for dag in pipelines/dags/*.py; do
+            echo "analyse de $dag"
+            .venv/bin/python -c "import ast,sys; ast.parse(open('$dag').read())"
+          done
+          AIRFLOW__CORE__DAGS_FOLDER=pipelines/dags \
+          AIRFLOW__CORE__LOAD_EXAMPLES=false \
+            .venv/bin/python -c "
+          from airflow.models import DagBag
+          sac = DagBag('pipelines/dags', include_examples=False)
+          if sac.import_errors:
+              for fichier, erreur in sac.import_errors.items():
+                  print(f'ECHEC {fichier}: {erreur}')
+              raise SystemExit(1)
+          print(f'{len(sac.dags)} DAG(s) analyses sans erreur : {list(sac.dags)}')
+          "
+
+  terraform:
+    name: Infrastructure
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Récupérer le dépôt
+        uses: actions/checkout@v4
+
+      - name: Installer Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.9.8"
+
+      - name: Formatage
+        run: terraform -chdir=infra fmt -check -recursive
+
+      - name: Initialiser sans backend distant
+        # -backend=false : la validation n'a pas besoin de lire l'état, donc
+        # pas besoin d'identifiants AWS. C'est ce qui permet à ce job de
+        # tourner sur une pull request venue de l'extérieur.
+        run: terraform -chdir=infra init -backend=false
+
+      - name: Validation
+        run: terraform -chdir=infra validate
+
+  conteneurs:
+    name: Pile de conteneurs
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Récupérer le dépôt
+        uses: actions/checkout@v4
+
+      - name: "Cohérence de docker-compose"
+        # `config` résout les variables, les ancres et les dépendances entre
+        # services, et échoue si un service référence un volume ou un réseau
+        # qui n'existe pas. C'est la vérification qui manquait quand seul
+        # airflow-webserver avait été reconstruit et pas le scheduler.
+        run: |
+          docker compose -f docker/docker-compose.yml \
+            --env-file docker/.env.example config > /dev/null
+          echo "Pile cohérente."
+
+      - name: "Aucun secret en clair dans la pile"
+        # Le fichier d'exemple ne doit contenir que des valeurs à remplir. Si
+        # un mot de passe réel y atterrit un jour, il part sur GitHub et il est
+        # public pour toujours — le retirer d'un commit ultérieur ne le retire
+        # pas de l'historique.
+        run: |
+          if grep -nP '=(?!a-remplir)' docker/.env.example \
+             | grep -vE '=(a-remplir|admin|eu-north-1|crediscore)' ; then
+            echo "ECHEC : une valeur qui ressemble à un secret réel figure dans .env.example"
+            exit 1
+          fi
+          echo "Aucune valeur réelle dans le fichier d'exemple."

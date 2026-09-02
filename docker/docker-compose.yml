@@ -188,6 +188,41 @@ services:
       - "9125"
     restart: unless-stopped
 
+  # API de scoring — la seule brique exposée à un appelant extérieur.
+  #
+  # Le CODE vient du dépôt crediscore-ml : c'est la solution d'IA, elle vit
+  # avec le modèle qu'elle sert. Ce dépôt-ci décrit COMMENT elle tourne. La
+  # séparation est celle du Bloc 4 : la solution d'un côté, son
+  # industrialisation de l'autre.
+  #
+  # Le modèle n'est pas dans l'image. Il est monté en lecture seule, et en
+  # production il viendrait du registre MLflow : figer un modèle dans une
+  # image empêcherait de dire, devant une contestation, quelle version exacte
+  # a décidé.
+  api:
+    build:
+      context: ../../crediscore-ml
+      dockerfile: Dockerfile
+    image: crediscore-api:1.0
+    environment:
+      # Contrôle C-2 : le journal des décisions part en base, pas dans un
+      # fichier. Sans cette variable l'API écrit un JSONL local et le dit au
+      # démarrage — utile en développement, inacceptable en production.
+      DATABASE_URL: postgresql://${POSTGRES_UTILISATEUR}:${POSTGRES_MOT_DE_PASSE}@postgres:5432/crediscore
+      # Contrôle C-7 : même sel que les jobs Spark, pour que le pseudonyme
+      # d'un dossier soit le même dans tous les journaux.
+      CREDISCORE_SEL_PSEUDO: ${CREDISCORE_SEL_PSEUDO}
+      MLFLOW_TRACKING_URI: http://mlflow:5000
+    volumes:
+      - ../../crediscore-ml/models:/app/models:ro
+      - ../../donnees_pipeline:/donnees_pipeline:ro
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
 volumes:
   postgres-donnees:
   airflow-logs:

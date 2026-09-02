@@ -3,18 +3,16 @@
 # (docker-compose), ce qui évite les incompatibilités Windows et garantit
 # l'identité entre le poste et l'infrastructure déployée.
 
-# API de scoring
-fastapi>=0.115
-uvicorn[standard]>=0.30
-pydantic>=2.8
+# L'API de scoring ne figure plus ici. Elle vit dans crediscore-ml, avec le
+# modèle qu'elle sert, et ses dépendances sont dans le requirements-api.txt de
+# ce dépôt-là. Les garder ici installerait fastapi, lightgbm et shap sur une
+# machine qui n'en exécute pas une ligne — voir api/README.md.
 
-# Chargement du modèle et explicabilité côté service
-lightgbm>=4.3
-shap>=0.46
+# Traitement des données du pipeline
 pandas>=2.2
 numpy>=1.26
 
-# Feature store
+# Feature store et journal des décisions
 psycopg[binary]>=3.2
 sqlalchemy>=2.0
 
@@ -24,7 +22,6 @@ evidently>=0.4
 
 # Qualité et tests
 pytest>=8.0
-httpx>=0.27
 ruff>=0.5
 
 # Traitement distribue — jobs d'agregation du pipeline (Bloc 3).
