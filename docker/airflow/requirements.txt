@@ -20,3 +20,22 @@ pyspark==3.5.3
 
 # Suivi d'expériences (déclenchement du réentraînement, Bloc 4)
 mlflow>=2.14
+
+# EXECUTION DES ETAPES DU MODELE (DAGs surveillance_derive et reentrainement).
+#
+# Ces DAGs appellent les scripts du depot crediscore-ml, monte en /opt. Le
+# calcul appartient au modele et vit avec lui ; l'orchestrateur se contente de
+# l'appeler — mais il lui faut le meme environnement d'execution.
+#
+# On consolide ici pour la meme raison que Spark tourne en local dans cette
+# image (decision D-101) : un demonstrateur mono-VM. A l'echelle cible, ces
+# etapes tourneraient dans l'image crediscore-api via un DockerOperator, et
+# cette section disparaitrait.
+lightgbm>=4.3
+scikit-learn>=1.5
+shap>=0.46
+joblib>=1.4
+
+# Lecture du socle directement dans le data lake (CREDISCORE_SOCLE=s3://...).
+s3fs>=2024.6
+

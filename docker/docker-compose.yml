@@ -35,6 +35,15 @@ x-airflow-commun: &airflow-commun
   volumes:
     - ../pipelines/dags:/opt/airflow/dags:ro
     - ../pipelines/spark_jobs:/opt/airflow/spark_jobs:ro
+    # Le dépôt de la solution IA. Les DAGs surveillance_derive et
+    # reentrainement appellent ses scripts : le calcul du modèle vit avec le
+    # modèle, l'orchestrateur ne fait que le déclencher.
+    #
+    # Monté en écriture, et il faut le dire : le réentraînement écrit le
+    # modèle, le seuil et les graphiques dans le dépôt. À l'échelle cible ces
+    # artefacts iraient dans MLflow et S3, et le code serait en lecture seule.
+    # C'est une concession de démonstrateur, pas une architecture.
+    - ../../crediscore-ml:/opt/crediscore-ml
     - airflow-logs:/opt/airflow/logs
   depends_on:
     postgres:
