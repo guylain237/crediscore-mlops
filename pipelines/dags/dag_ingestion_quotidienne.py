@@ -14,11 +14,26 @@ variables.
 from __future__ import annotations
 
 import os
+import sys
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 
 import boto3
 from airflow.decorators import dag, task
 from airflow.operators.trigger_dagrun import TriggerDagRunOperator
+
+# Les controles qualite vivent hors des DAGs pour pouvoir etre testes sans S3
+# ni Airflow.
+#
+# Deux emplacements possibles, et il faut les accepter tous les deux : dans le
+# conteneur, docker-compose monte le dossier a cote des DAGs ; en integration
+# continue et sur le poste, le depot est simplement clone. Coder un seul chemin
+# en dur ferait echouer l'analyse du DAG dans l'autre contexte — et une
+# analyse qui echoue ne se voit pas, le DAG disparait de l'interface.
+for _chemin in ("/opt/airflow/pipelines", str(Path(__file__).resolve().parents[1])):
+    if _chemin not in sys.path:
+        sys.path.insert(0, _chemin)
+from qualite import controles as qualite
 
 BUCKET = os.environ.get("CREDISCORE_BUCKET", "")
 
@@ -73,7 +88,7 @@ parametres = {
 def ingestion_quotidienne():
     @task
     def detecter_fichiers() -> dict:
-        """Les huit fichiers attendus sont-ils presents dans raw/ ?"""
+        """Inventorie raw/ et verifie que les huit fichiers attendus sont la."""
         s3 = boto3.client("s3")
         reponse = s3.list_objects_v2(Bucket=BUCKET, Prefix="raw/")
         objets = {
@@ -84,66 +99,22 @@ def ingestion_quotidienne():
             for o in reponse.get("Contents", [])
         }
 
-        manquants = [f for f in FICHIERS_ATTENDUS if f not in objets]
-        if manquants:
-            raise ValueError(
-                f"Fichiers absents de raw/ : {manquants}. "
-                f"Le traitement ne peut pas demarrer."
-            )
-
-        print(f"Les {len(FICHIERS_ATTENDUS)} fichiers attendus sont presents.")
+        # Le controle lui-meme vit dans pipelines/qualite : il est ainsi
+        # exerce par des tests, sans avoir besoin de S3 ni d'Airflow.
+        print(qualite.controler_presence(objets, list(FICHIERS_ATTENDUS)))
         return {f: objets[f] for f in FICHIERS_ATTENDUS}
 
     @task
-    def controler_fraicheur(inventaire: dict) -> None:
-        """Le flux du bureau externe est-il assez recent ?"""
-        modifie = datetime.fromisoformat(inventaire["bureau.csv"]["modifie"])
-        age = (datetime.now(modifie.tzinfo) - modifie).days
-
-        print(f"Flux bureau depose il y a {age} jours.")
-        if age > FRAICHEUR_MAX_JOURS:
-            raise ValueError(
-                f"Flux bureau vieux de {age} jours, au-dela des "
-                f"{FRAICHEUR_MAX_JOURS} tolerees. Un historique perime ne "
-                f"reflete plus la situation du demandeur."
-            )
+    def controler_volumetrie(inventaire: dict) -> None:
+        """Controle C-6, volet volumetrie."""
+        print(qualite.controler_volumetrie(inventaire))
 
     @task
-    def controler_volumetrie(inventaire: dict) -> None:
-        """Les fichiers ont-ils une taille plausible ?
-
-        On ne compte pas les lignes ici : cela demanderait de lire 2,5 Gio pour
-        un controle preliminaire. La taille en octets suffit a detecter une
-        troncature ou un export partiel, qui sont les deux pannes reelles.
-        """
-        # Tailles de reference mesurees le 30/07/2026, en octets.
-        REFERENCE = {
-            "application_train.csv": 166_133_370,
-            "application_test.csv": 26_567_651,
-            "bureau.csv": 170_016_717,
-            "bureau_balance.csv": 375_592_889,
-            "previous_application.csv": 404_973_293,
-            "POS_CASH_balance.csv": 392_703_158,
-            "credit_card_balance.csv": 424_582_605,
-            "installments_payments.csv": 723_118_349,
-        }
-
-        anomalies = []
-        for fichier, attendu in REFERENCE.items():
-            constate = inventaire[fichier]["taille"]
-            ecart = abs(constate - attendu) / attendu
-            if ecart > TOLERANCE_TAILLE:
-                anomalies.append(
-                    f"{fichier} : {constate:,} octets contre {attendu:,} attendus "
-                    f"({ecart * 100:.1f} % d'ecart)".replace(",", " ")
-                )
-
-        if anomalies:
-            raise ValueError(
-                "Volumetrie anormale, publication bloquee :\n  "
-                + "\n  ".join(anomalies)
-            )
-        print(f"Les {len(REFERENCE)} fichiers ont une taille conforme.")
+    def controler_fraicheur(inventaire: dict) -> None:
+        """Controle C-6, volet fraicheur."""
+        print(qualite.controler_fraicheur(
+            inventaire, maximum_jours=FRAICHEUR_MAX_JOURS
+        ))
 
     declencher_variables = TriggerDagRunOperator(
         task_id="declencher_construction_variables",
@@ -153,8 +124,11 @@ def ingestion_quotidienne():
     )
 
     inventaire = detecter_fichiers()
-    controles = [controler_fraicheur(inventaire), controler_volumetrie(inventaire)]
-    controles >> declencher_variables
+    # Nom volontairement different du module qualite : une variable locale
+    # appelee 'controles' masquerait l'import dans les taches ci-dessus, et
+    # l'erreur ne surviendrait qu'a l'execution du DAG.
+    etapes = [controler_volumetrie(inventaire), controler_fraicheur(inventaire)]
+    etapes >> declencher_variables
 
 
 ingestion_quotidienne()

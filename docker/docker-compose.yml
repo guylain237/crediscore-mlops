@@ -35,6 +35,8 @@ x-airflow-commun: &airflow-commun
   volumes:
     - ../pipelines/dags:/opt/airflow/dags:ro
     - ../pipelines/spark_jobs:/opt/airflow/spark_jobs:ro
+    # Les contrôles qualité, extraits des DAGs pour être testables.
+    - ../pipelines/qualite:/opt/airflow/pipelines/qualite:ro
     # Le dépôt de la solution IA. Les DAGs surveillance_derive et
     # reentrainement appellent ses scripts : le calcul du modèle vit avec le
     # modèle, l'orchestrateur ne fait que le déclencher.
