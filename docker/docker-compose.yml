@@ -224,8 +224,16 @@ services:
       # d'un dossier soit le même dans tous les journaux.
       CREDISCORE_SEL_PSEUDO: ${CREDISCORE_SEL_PSEUDO}
       MLFLOW_TRACKING_URI: http://mlflow:5000
+      # Le magasin de variables vient du DATA LAKE, pas d'une copie locale.
+      # Sans cette ligne l'API cherchait /donnees_pipeline sur la VM, où ce
+      # dossier est vide : elle redémarrait en boucle sur un FileNotFoundError.
+      # Le pipeline écrit dans curated/, l'API y lit — c'est ce qui relie
+      # vraiment le Bloc 3 au Bloc 4.
+      CREDISCORE_SOCLE: s3://${CREDISCORE_BUCKET}/curated/socle_complet
     volumes:
       - ../../crediscore-ml/models:/app/models:ro
+      # Reste monté pour le développement sur poste, où CREDISCORE_SOCLE
+      # n'est pas définie et le socle vit sur le disque.
       - ../../donnees_pipeline:/donnees_pipeline:ro
     ports:
       - "8000:8000"
