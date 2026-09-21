@@ -23,7 +23,7 @@
 - **Choix :** `infra/` (Bloc 2) et `pipelines/` (Bloc 3) dans ce dépôt n°2, aux
   côtés du CI/CD ; le dépôt n°1 reste dédié à la solution IA.
 - **Raison :** infrastructure, pipeline et déploiement partagent le même cycle de
-  vie opérationnel ; deux dépôts au total restent simples à présenter au jury,
+  vie opérationnel ; deux dépôts au total restent simples à présenter,
   chaque bloc pointant vers un dossier précis.
 
 ## D-103 — 28/07/2026 — Environnement virtuel dédié, et conteneurs pour Airflow/Spark
@@ -36,7 +36,7 @@
   alimenté par `requirements.txt` ; Airflow, Spark et PostgreSQL exclusivement en
   conteneurs (`docker/`).
 - **Raison :** le poste exécute alors les mêmes images que l'infrastructure
-  déployée — la démonstration au jury n'est pas un montage local mais l'exécution
+  déployée — la démonstration n'est pas un montage local mais l'exécution
   réelle des artefacts livrés. Les dépendances restent isolées et reproductibles.
 
 ## D-104 — 30/07/2026 — Identifiants AWS temporaires, et séparation opérateur / application
@@ -111,7 +111,7 @@
 - **Raison :** une seule table répond à trois exigences distinctes — minimisation
   (ce qui n'est pas au registre n'est pas publié), explicabilité (d'un facteur
   SHAP à sa définition) et reproductibilité (quel code, quelles données, quel
-  jour). Le coût est marginal, la valeur en soutenance est élevée.
+  jour). Le coût est marginal, la valeur en revue est élevée.
 
 ## D-108 — 22/08/2026 — L'interrupteur du soir arrête la VM, il ne la détruit plus
 
@@ -161,7 +161,7 @@
      du compte, en écriture. Une clé de déploiement donne la lecture d'un seul
      dépôt. Si la VM est compromise, l'attaquant lit du code déjà destiné à
      devenir public — et rien d'autre.
-  3. **Calendrier.** Les dépôts devront être ouverts au jury, mais le faire
+  3. **Calendrier.** Les dépôts devront être rendus publics, mais le faire
      maintenant, à l'entrée des douze jours les plus chargés, exposerait
      publiquement la moindre erreur de commit. L'ouverture est reportée au 05/09,
      après l'audit final.
@@ -201,7 +201,7 @@
 - **Latence assumée :** `ConteneurArrete` met environ huit minutes à se
   déclencher — cinq minutes avant que Prometheus considère la série périmée,
   puis les trois minutes du `for:`. Acceptable pour ce projet, et documenté
-  plutôt que découvert par le jury.
+  plutôt que découvert en revue.
 - **Reste ouvert :** les alertes sont évaluées et visibles dans Grafana, mais
   pas encore routées vers un canal (courriel ou webhook). À traiter avant la
   vidéo du Bloc 3.
@@ -224,7 +224,7 @@
   indiscernable d'une règle incapable de se déclencher — c'est précisément ce
   que l'audit D-110 avait révélé sur deux règles. Le déclenchement provoqué est
   la seule preuve.
-- **Réutilisable en soutenance :** la séquence dure cinq minutes et se rejoue à
+- **Réutilisable en démonstration :** la séquence dure cinq minutes et se rejoue à
   volonté. Elle vaut mieux qu'un tableau de bord vert immobile.
 
 ## D-112 — 26/08/2026 — Python 3.11 pour Spark, et exécution en conteneur sur le poste

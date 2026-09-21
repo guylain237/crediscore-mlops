@@ -42,7 +42,7 @@ Reprises de `plan_features.md` §1 — elles ne sont pas négociables.
 | **F4** | Explicable à un client | Chaque variable porte une description au registre |
 | **F5** | **Une absence n'est pas un zéro** | Aucune imputation par 0 ; le `NULL` est conservé et un indicateur de présence est produit |
 
-> **F5 mérite un mot en soutenance.** Un dossier sans historique au bureau de
+> **F5 mérite un mot.** Un dossier sans historique au bureau de
 > crédit n'a pas « zéro dette » : il n'a *pas d'information*. Remplir par zéro
 > reviendrait à le déclarer bon payeur. LightGBM traite nativement les valeurs
 > manquantes — on lui laisse cette information plutôt que de la détruire.
@@ -172,7 +172,7 @@ silencieusement ignorés :
 
 En revanche, `application → bureau` et `application → previous_application`
 comptent **zéro** orphelin : l'intégrité référentielle est parfaite du côté des
-dossiers. À dire au jury — c'est une mesure, pas une supposition.
+dossiers. C'est une mesure, pas une supposition.
 
 ---
 
@@ -278,8 +278,8 @@ immédiatement compréhensible par le demandeur — c'est exactement ce que dema
 l'article 22.
 
 > `RATIO_ANCIENNETE` divise par `DAYS_REGISTRATION` et non par `DAYS_BIRTH` : le
-> ratio classique ancienneté/âge est **interdit** par F2. Ce détail se raconte
-> bien en soutenance — il montre que la contrainte réglementaire a modifié une
+> ratio classique ancienneté/âge est **interdit** par F2. Ce détail mérite
+> d'être souligné — il montre que la contrainte réglementaire a modifié une
 > variable, pas seulement un discours.
 
 ### 5.4 Convention de nommage

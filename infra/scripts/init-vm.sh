@@ -25,7 +25,7 @@ systemctl enable --now docker
 usermod -aG docker ec2-user
 
 # Versions FIGÉES, et non « latest » : une image reconstruite dans trois mois
-# doit se comporter exactement comme celle qui a été filmée pour le jury.
+# doit se comporter exactement comme celle qui a été filmée pour la démonstration.
 # C'est aussi ce qui a mordu le 19/08 — « latest » avait livré un Compose v5.5
 # qui exige buildx >= 0.17, absent de la machine : la construction échouait.
 VERSION_COMPOSE=v2.31.0

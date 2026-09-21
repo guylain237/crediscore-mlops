@@ -144,7 +144,7 @@ resource "aws_s3_bucket_public_access_block" "datalake" {
   # Ces quatre verrous sont actifs par défaut sur tout nouveau bucket depuis
   # 2023. Les déclarer ne change donc pas l'état : cela rend le choix
   # VOLONTAIRE et AUDITABLE, au lieu d'être un défaut hérité. C'est cette
-  # différence que vérifie un audit — et le jury.
+  # différence que vérifie un audit.
   block_public_acls       = true
   ignore_public_acls      = true
   block_public_policy     = true

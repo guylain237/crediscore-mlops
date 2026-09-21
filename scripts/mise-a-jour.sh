@@ -10,8 +10,8 @@
 #
 # La VM tire le code par une clé de déploiement en lecture seule (D-109) : elle
 # peut lire le dépôt, jamais y écrire. Ce qui tourne correspond donc toujours à
-# un commit identifiable — le SHA affiché ci-dessous est celui qu'on montre au
-# jury lors de la démonstration.
+# un commit identifiable — le SHA affiché ci-dessous est celui qu'on montre
+# lors de la démonstration.
 
 set -euo pipefail
 

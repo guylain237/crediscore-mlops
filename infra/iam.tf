@@ -16,7 +16,7 @@
 #
 # Pourquoi les séparer : l'API est le composant exposé, donc le plus susceptible
 # d'être compromis. Si elle portait les droits de la VM, une faille dans l'API
-# donnerait l'ensemble du data lake. Cette séparation est ce qu'un jury attend
+# donnerait l'ensemble du data lake. Cette séparation est ce qu'on attend
 # quand le référentiel dit « IAM par rôles ».
 ###############################################################################
 
@@ -101,7 +101,7 @@ resource "aws_iam_role_policy" "droits_traitement" {
 # Session Manager : permet de se connecter à la VM SANS ouvrir le port 22 et
 # sans clé SSH, avec journalisation des sessions. Gratuit. On garde SSH en
 # parallèle pour le confort, mais SSM est la voie recommandée en production —
-# argument à citer en soutenance.
+# argument à citer en revue d'architecture.
 resource "aws_iam_role_policy_attachment" "ssm" {
   role       = aws_iam_role.vm_traitement.name
   policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"

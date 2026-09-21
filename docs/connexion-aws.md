@@ -54,7 +54,7 @@ Elle délivre des identifiants **temporaires** (quelques heures), renouvelés pa
 une simple connexion navigateur. Aucun secret durable ne se pose sur ton disque.
 
 1. Console → service **IAM Identity Center** → *Activer*. Choisis la région
-   **`eu-north-1` (Paris)** comme région de l'annuaire.
+   **`eu-north-1` (Stockholm)** comme région de l'annuaire.
 2. *Utilisateurs* → *Ajouter un utilisateur* : ton nom, ton e-mail (tu recevras
    une invitation à définir le mot de passe).
 3. *Jeux d'autorisations* → *Créer* → jeu d'autorisations prédéfini
@@ -70,7 +70,7 @@ provisionne** : Terraform doit créer VPC, S3, KMS, IAM, RDS, EKS — restreindr
 finement reviendrait à réécrire une politique d'administration. Le moindre
 privilège s'applique à l'**identité de l'application**, créée à l'étape 7, qui
 n'a droit qu'à deux préfixes S3. Cette séparation opérateur / exécution est
-exactement ce qu'un jury attend d'un architecte, et se défend en une phrase.
+exactement ce qu'on attend d'un architecte, et se défend en une phrase.
 
 ### Option B — Utilisateur IAM avec clés d'accès (repli)
 
@@ -496,7 +496,7 @@ capable d'effacer tes données.
 Le poste à surveiller en priorité est la **NAT Gateway** (~32 €/mois, facturée à
 l'heure même inutilisée) : c'est le premier dérapage de facture sur ce type
 d'architecture. Détruire l'infra le soir et la recréer le matin est précisément
-ce que l'IaC rend possible — et c'est un argument à faire valoir au jury, pas une
+ce que l'IaC rend possible — et c'est un argument à faire valoir, pas une
 bricole.
 
 ---
