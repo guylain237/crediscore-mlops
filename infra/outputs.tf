@@ -9,7 +9,7 @@
 ###############################################################################
 
 output "datalake_bucket" {
-  description = "Nom du bucket du data lake. À reporter dans .env sous DATALAKE_BUCKET."
+  description = "Nom du bucket du data lake. À reporter dans .env sous CREDISCORE_BUCKET."
   value       = aws_s3_bucket.datalake.id
 }
 
