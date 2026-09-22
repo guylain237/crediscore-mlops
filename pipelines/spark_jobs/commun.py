@@ -94,6 +94,20 @@ def creer_session(nom: str, memoire_go: int = 4, coeurs: str = "*") -> SparkSess
 
     session = constructeur.getOrCreate()
     session.sparkContext.setLogLevel("ERROR")
+
+    # Les workers Python de Spark sont des processus separes : ils n'heritent
+    # pas du sys.path du driver. Un module appele DANS une UDF doit donc leur
+    # etre expedie, sinon ils echouent sur ModuleNotFoundError alors que le
+    # meme import fonctionne cote driver.
+    #
+    # C'est le cas de pseudonyme.py, dont agreger_installments fait une UDF
+    # pour le controle C-7. Sans cette ligne, le job demarre normalement puis
+    # meurt a la premiere ligne traitee.
+    for module in ("pseudonyme.py",):
+        fichier = Path(__file__).with_name(module)
+        if fichier.exists():
+            session.sparkContext.addPyFile(str(fichier))
+
     return session
 
 
