@@ -96,6 +96,31 @@ resource "aws_instance" "traitement" {
     Name = "${var.nom_projet}-vm-traitement"
     Role = "traitement"
   }
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # NE PAS RECREER LA MACHINE PARCE QU'AWS A PUBLIE UNE NOUVELLE AMI
+  # ═══════════════════════════════════════════════════════════════════════════
+  #
+  # Constate le 21/09/2026 : un simple demarrage annoncait
+  # « 2 to add, 2 to destroy » au lieu de « 1 to change ». Cause : l'AMI est lue
+  # dans le parametre « derniere Amazon Linux 2023 », et AWS en publie une
+  # nouvelle chaque mois. L'identifiant ayant bouge depuis la creation du
+  # 08/09, Terraform voulait remplacer l'instance — donc emporter le disque
+  # racine, PostgreSQL, le feature store et la piste d'audit.
+  #
+  # Exactement ce que la decision D-108 cherchait a empecher, par une autre
+  # porte : D-108 traitait l'extinction du soir, pas la derive de l'AMI.
+  #
+  # On conserve la lecture du parametre — une machine CREEE aujourd'hui part
+  # d'un systeme a jour — mais on ignore la derive ensuite. Mettre a jour le
+  # systeme d'exploitation redevient alors un acte volontaire :
+  #
+  #   terraform apply -replace=aws_instance.traitement
+  #
+  # ... apres avoir verifie qu'aucune donnee utile ne vit sur le disque racine.
+  lifecycle {
+    ignore_changes = [ami]
+  }
 }
 
 
