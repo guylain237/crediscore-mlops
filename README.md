@@ -93,3 +93,4 @@ eux qui permettent de le reconstruire à l'identique.
 - Pseudonymisation à l'ingestion, minimisation des variables publiées.
 - Journalisation d'audit de chaque décision de scoring (traçabilité art. 22 RGPD).
 - Contrôles qualité bloquants avant publication au feature store.
+
