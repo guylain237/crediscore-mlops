@@ -19,7 +19,17 @@ pyarrow>=17.0
 pyspark==3.5.3
 
 # Suivi d'expériences (déclenchement du réentraînement, Bloc 4)
-mlflow>=2.14
+#
+# VERSION EXACTE, ET NON « >= ». Le serveur MLflow de la pile est épinglé à
+# 2.17.2 (docker/mlflow/Dockerfile). Un client d'une autre version majeure lui
+# parle dans un dialecte qu'il ne connaît pas : MLflow 3 appelle
+# /api/2.0/mlflow/logged-models, que 2.17.2 ne sert pas, et le réentraînement
+# échoue sur un 404 APRÈS avoir entraîné le modèle.
+#
+# C'est arrivé le 22/09 : la même image, reconstruite un mois plus tard, a
+# récupéré MLflow 3 au lieu de 2. Un « >= » rend la construction dépendante du
+# jour où on la lance — l'inverse de ce que le projet affirme.
+mlflow==2.17.2
 
 # EXECUTION DES ETAPES DU MODELE (DAGs surveillance_derive et reentrainement).
 #
