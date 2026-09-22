@@ -12,8 +12,17 @@ FROM apache/airflow:2.10.5-python3.11
 USER root
 
 # Java est requis par Spark. Le JRE headless suffit et reste léger.
+#
+# libgomp1 est la bibliotheque OpenMP de GCC, dont depend l'extension
+# compilee de LightGBM. Le paquet Python s'installe sans elle : l'erreur ne
+# surgit qu'au premier import, a l'execution du DAG de reentrainement, sous
+# la forme  OSError: libgomp.so.1: cannot open shared object file
+#
+# Le Dockerfile de l'API l'installait deja. Celui-ci l'avait oubliee, alors
+# que le DAG reentrainement execute les memes scripts src/models/*.py.
+# L'asymetrie entre les deux images etait le defaut.
 RUN apt-get update \
- && apt-get install -y --no-install-recommends openjdk-17-jre-headless curl procps \
+ && apt-get install -y --no-install-recommends openjdk-17-jre-headless curl procps libgomp1 \
  && apt-get clean \
  && rm -rf /var/lib/apt/lists/*
 
