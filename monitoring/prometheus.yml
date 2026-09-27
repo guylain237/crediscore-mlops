@@ -1,4 +1,4 @@
-# Supervision de l'infrastructure et du pipeline (Blocs 2 et 3).
+# Supervision de l'infrastructure et du pipeline de donnees.
 global:
   scrape_interval: 15s
   evaluation_interval: 15s
@@ -22,7 +22,7 @@ scrape_configs:
     static_configs:
       - targets: ["statsd-exporter:9102"]
 
-  # API de scoring (Bloc 4) : latence, taux d'acceptation, volume de décisions
+  # API de scoring : latence, taux d'acceptation, volume de décisions
   - job_name: api_scoring
     static_configs:
       - targets: ["api:8000"]

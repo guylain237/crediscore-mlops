@@ -1,8 +1,8 @@
 ###############################################################################
 # network.tf — le réseau privé qui isole l'infrastructure
 #
-# Un VPC est un réseau virtuel qui n'appartient qu'à toi : rien n'y entre sans
-# une règle explicite. Tout ce qui suit est GRATUIT (VPC, sous-réseaux,
+# Un VPC est un réseau virtuel privé au compte : rien n'y entre sans une règle
+# explicite. Tout ce qui suit est GRATUIT (VPC, sous-réseaux,
 # passerelle Internet, tables de routage, groupes de sécurité) — seule la VM du
 # fichier compute.tf est facturée à l'heure.
 #
@@ -43,7 +43,7 @@ resource "aws_subnet" "public" {
 
   # « Public » ne signifie pas « ouvert » : cela signifie que le sous-réseau a
   # une route vers Internet. Ce qui protège la VM, c'est le groupe de sécurité
-  # ci-dessous, qui n'autorise QUE ton adresse IP.
+  # ci-dessous, qui n'autorise QUE l'adresse IP administrateur.
   map_public_ip_on_launch = true
 
   tags = {
@@ -112,7 +112,7 @@ resource "aws_route_table_association" "public" {
 # ─────────────────────────────────────────────────────────────────────────────
 locals {
   # Les interfaces web de la pile applicative. Elles seront exposées
-  # uniquement à ton adresse IP, jamais à Internet.
+  # uniquement à l'adresse IP administrateur, jamais à Internet.
   ports_applicatifs = {
     airflow    = 8080
     grafana    = 3000

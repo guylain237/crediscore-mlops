@@ -43,7 +43,7 @@ output "commande_depot_csv" {
 # ─────────────────────────────────────────────────────────────────────────────
 
 output "id_vpc" {
-  description = "Identifiant du VPC — à montrer dans la vidéo du Bloc 2."
+  description = "Identifiant du VPC du projet."
   value       = aws_vpc.principal.id
 }
 

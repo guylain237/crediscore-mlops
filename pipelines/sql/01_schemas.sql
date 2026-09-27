@@ -1,6 +1,6 @@
 -- =============================================================================
 -- CrediScore — Modèle physique : entrepôt en étoile, feature store, audit
--- Bloc 2 : modélisation et sécurisation par la séparation des accès
+-- Modélisation et sécurisation par la séparation des accès
 -- =============================================================================
 --
 -- Quatre schémas, et la séparation entre eux EST une mesure de sécurité :
@@ -132,7 +132,7 @@ COMMENT ON TABLE entrepot.fait_demande IS
 -- =============================================================================
 -- 3. FEATURE STORE
 -- =============================================================================
--- La table large des quelque 230 variables est créée par le pipeline (Bloc 3) à
+-- La table large des quelque 230 variables est créée par le pipeline à
 -- partir du manifeste : l'énumérer en DDL figerait un contrat qui doit évoluer
 -- avec le feature engineering. Son REGISTRE, lui, est défini ici — c'est lui qui
 -- rend chaque variable traçable jusqu'à sa source.

@@ -83,7 +83,7 @@ parametres = {
     start_date=datetime(2026, 8, 1, tzinfo=timezone.utc),
     catchup=False,
     default_args=parametres,
-    tags=["crediscore", "bloc-3", "controle"],
+    tags=["crediscore", "pipeline", "controle"],
 )
 def ingestion_quotidienne():
     @task

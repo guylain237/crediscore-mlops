@@ -1,6 +1,5 @@
 # Architecture technique — CrediScore
 
-**Bloc 2 — livrable : documentation accessible de l'architecture**
 Dernière vérification sur l'infrastructure réelle : 24/08/2026.
 
 Ce document décrit ce qui **tourne**, pas ce qui est prévu. Chaque élément du
@@ -32,9 +31,9 @@ flowchart TB
         subgraph vm["VM de traitement — EC2 t3.large, disque chiffré"]
             AF["Airflow<br/>orchestration"]
             SP["Spark local<br/>agrégations"]
-            PG[("PostgreSQL<br/>feature store<br/>+ entrepôt étoile")]
+            PG[("PostgreSQL<br/>journal d'audit<br/>feature store : cible")]
             ML["MLflow<br/>expériences · modèles"]
-            API["API de scoring<br/>(Bloc 4)"]
+            API["API de scoring"]
         end
 
         subgraph sup["Supervision"]
@@ -78,10 +77,10 @@ flowchart TB
 | Couche | Composant | Rôle | Pourquoi séparé |
 |---|---|---|---|
 | **Stockage** | S3, **6 zones** | Brutes, référence, nettoyées, prêtes, artefacts, audit | Chaque zone a ses propres droits — voir §2 bis. `raw/` est en lecture seule même pour la VM ; `audit/` en écriture seule pour l'API |
-| **Orchestration** | Airflow | Enchaîne ingestion → agrégation → publication | Reprise sur erreur et alertes, sans intervention manuelle (exigence Bloc 3) |
+| **Orchestration** | Airflow | Enchaîne ingestion → agrégation → publication | Reprise sur erreur et alertes, sans intervention manuelle |
 | **Traitement** | Spark en mode local | Agrège 58 M de lignes en variables par dossier | Même code qu'un cluster ; seul le maître change à l'échelle cible |
-| **Service de variables** | PostgreSQL | Feature store + entrepôt en étoile | Définitions identiques à l'entraînement et au scoring — élimine le *train/serving skew* |
-| **Suivi de modèles** | MLflow | Expériences, métriques, registre | Rend le réentraînement reproductible (exigence Bloc 4) |
+| **Service de variables** | Parquet sur S3 aujourd'hui, PostgreSQL en cible | Magasin de variables + entrepôt en étoile | Définitions identiques à l'entraînement et au scoring — élimine le *train/serving skew*. Le schéma `feature_store` est créé, pas encore alimenté (voir §9) |
+| **Suivi de modèles** | MLflow | Expériences, métriques, registre | Rend le réentraînement reproductible |
 | **Supervision** | Prometheus + Grafana | Métriques, seuils, alertes | Détecter une panne avant l'utilisateur |
 
 ---
@@ -180,7 +179,7 @@ quotidiennement ; le scoring se contente de la lire.
 |---|---|---|
 | **Chiffrement au repos** | S3 chiffré côté serveur ; volume EC2 `encrypted = true` | Console AWS, ou `terraform state show aws_s3_bucket_server_side_encryption_configuration.datalake` |
 | **Chiffrement en transit** | TLS pour S3 et les API AWS ; SSH pour l'accès à la VM | — |
-| **Moindre privilège** | Deux rôles IAM distincts : la VM et l'API de scoring | Depuis la VM : lecture `raw/` ✅, écriture `curated/` ✅, écriture `raw/` **refusée** |
+| **Moindre privilège** | Deux rôles IAM distincts : la VM et l'API de scoring | Depuis la VM : lecture `raw/` autorisée, écriture `curated/` autorisée, écriture `raw/` **refusée** |
 | **Aucun secret dans le code** | Rôle IAM d'instance ; `.env` hors dépôt ; clé de déploiement en lecture seule | `git log -S` sur l'historique : aucune clé, aucun jeton |
 
 **La séparation des schémas PostgreSQL est elle-même une mesure.** Les attributs
@@ -208,14 +207,14 @@ les expressions ont été **vérifiées contre les métriques réellement expos�
 deux d'entre elles interrogeaient au départ des séries inexistantes et ne
 pouvaient jamais se déclencher (décision D-110).
 
-| Alerte | Seuil | Bloc |
+| Alerte | Seuil | Domaine |
 |---|---|---|
-| `DisqueBientotPlein` | < 15 % libres pendant 5 min | 2 |
-| `MemoireSaturee` | > 90 % pendant 10 min | 2 |
-| `ConteneurArrete` | < 9 conteneurs pendant 3 min | 2 |
-| `OrdonnanceurArrete` | aucun battement de cœur Airflow pendant 5 min | 3 |
-| `DagIllisible` | ≥ 1 erreur d'import de DAG | 3 |
-| `TacheAirflowEnEchec` | ≥ 1 échec sur 15 min | 3 |
+| `DisqueBientotPlein` | < 15 % libres pendant 5 min | infrastructure |
+| `MemoireSaturee` | > 90 % pendant 10 min | infrastructure |
+| `ConteneurArrete` | < 9 conteneurs pendant 3 min | infrastructure |
+| `OrdonnanceurArrete` | aucun battement de cœur Airflow pendant 5 min | pipeline |
+| `DagIllisible` | ≥ 1 erreur d'import de DAG | pipeline |
+| `TacheAirflowEnEchec` | ≥ 1 échec sur 15 min | pipeline |
 
 Le tableau de bord `CrediScore — Infrastructure` est **provisionné par fichier**,
 pas configuré à la main : une réinstallation le retrouve à l'identique. Ses
@@ -223,8 +222,7 @@ seuils de couleur reproduisent exactement ceux des règles — ce qui vire au ro
 à l'écran est ce qui déclenche une alerte.
 
 > **Limite assumée à ce stade :** les alertes sont évaluées et visibles, mais
-> pas encore *routées* vers un canal (courriel ou Slack). Le point est ouvert et
-> sera traité avant la vidéo du Bloc 3.
+> pas encore *routées* vers un canal (courriel ou Slack). Le point reste ouvert.
 
 ---
 
@@ -237,8 +235,8 @@ réduite, sur une seule machine.
 | Brique | Démonstrateur | Cible | Ce qui change |
 |---|---|---|---|
 | Traitement | Spark en mode local | Cluster 3 nœuds | l'URL du maître |
-| Feature store | PostgreSQL conteneurisé | PostgreSQL managé | une chaîne de connexion |
-| Inférence | k3s sur la VM | Kubernetes managé, 3 pods | le contexte `kubectl` |
+| Feature store | **Parquet sur S3** (`curated/socle_complet`) | PostgreSQL managé | le support, pas la définition — les schémas PostgreSQL existent mais ne sont pas encore alimentés |
+| Inférence | **conteneur Docker Compose** (k3s coupé le 02/09, voir `k8s/README.md`) | Kubernetes managé, 3 pods | l'orchestrateur de conteneurs |
 | Entraînement | Conteneur à la demande | Cluster éphémère 16 vCPU | une variable Terraform |
 
 Ce n'est pas une simplification de confort mais un **arbitrage coût/bénéfice** :

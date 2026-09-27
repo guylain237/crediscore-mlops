@@ -24,8 +24,8 @@ data "aws_ssm_parameter" "ami_al2023" {
   name = "/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64"
 }
 
-# Ta clé publique est déposée sur la VM ; ta clé privée ne quitte jamais ton
-# poste. AWS ne voit que la moitié publique.
+# La clé publique est déposée sur la VM ; la clé privée ne quitte jamais le
+# poste administrateur. AWS ne voit que la moitié publique.
 resource "aws_key_pair" "admin" {
   key_name   = "${var.nom_projet}-admin"
   public_key = file(pathexpand(var.chemin_cle_publique))
@@ -139,9 +139,8 @@ resource "aws_instance" "traitement" {
 # nuit contre une demi-heure de remise en route chaque matin, sur une machine
 # qui porte désormais de l'état.
 #
-# La reproductibilité complète reste démontrable — et sera filmée une fois pour
-# la vidéo du Bloc 2 : `terraform destroy` puis `terraform apply` reconstruit
-# l'ensemble à partir du seul code.
+# La reproductibilité complète reste vérifiable : `terraform destroy` puis
+# `terraform apply` reconstruit l'ensemble à partir du seul code.
 #
 #   Le soir  :  terraform apply -var="vm_active=false"     -> stopped
 #   Le matin :  terraform apply                            -> running

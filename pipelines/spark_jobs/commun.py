@@ -154,8 +154,8 @@ def ecrire(df: DataFrame, zone: str, nom: str) -> str:
 
     Le mode `overwrite` — et non `append` — est ce qui rend le pipeline
     idempotent : rejouer un jour déjà traité produit le même résultat et ne peut
-    pas créer de doublon. C'est l'exigence d'automatisation du Bloc 3 traduite en
-    une ligne de code.
+    pas créer de doublon. C'est l'exigence d'automatisation du pipeline traduite
+    en une ligne de code.
     """
     destination = chemin_zone(zone, nom)
     df.write.mode("overwrite").parquet(destination)

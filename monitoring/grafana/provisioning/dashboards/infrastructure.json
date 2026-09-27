@@ -2,7 +2,7 @@
   "uid": "crediscore-infra",
   "title": "CrediScore — Infrastructure",
   "description": "Santé de la VM de traitement et de la pile de conteneurs. Les seuils de couleur reproduisent exactement ceux des règles d'alerte Prometheus (monitoring/regles_alertes.yml) : ce qui vire au rouge ici est ce qui déclenche une alerte.",
-  "tags": ["crediscore", "bloc-2", "infrastructure"],
+  "tags": ["crediscore", "infrastructure"],
   "timezone": "browser",
   "editable": true,
   "schemaVersion": 39,
@@ -362,7 +362,7 @@
               "alertname": "Alerte",
               "alertstate": "État",
               "severite": "Sévérité",
-              "bloc": "Bloc"
+              "domaine": "Domaine"
             }
           }
         }

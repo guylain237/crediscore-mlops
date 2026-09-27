@@ -36,12 +36,12 @@ provider "aws" {
   #
   # Le provider utilise alors la même chaîne de recherche que boto3 :
   # variable AWS_PROFILE → fichier ~/.aws/config → rôle IAM de la machine.
-  # Conséquence pratique : le même code fonctionne sur ton poste (où
-  # AWS_PROFILE vaut « crediscore ») et dans GitHub Actions (où les
-  # identifiants viendront d'un rôle assumé par OIDC, sans aucun profil).
+  # Conséquence pratique : le même code fonctionne sur le poste de
+  # développement (où AWS_PROFILE vaut « crediscore ») et dans GitHub Actions
+  # (où les identifiants viennent d'un rôle assumé par OIDC, sans profil).
   #
   # Figer `profile = "crediscore"` ici casserait la CI, puisque ce profil
-  # n'existe que sur ta machine.
+  # n'existe que sur le poste de développement.
 
   # Étiquettes appliquées automatiquement à TOUTE ressource créée par ce
   # provider. Deux usages concrets :

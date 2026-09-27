@@ -75,7 +75,7 @@ parametres = {
     catchup=False,
     default_args=parametres,
     max_active_runs=1,
-    tags=["crediscore", "bloc-4", "reentrainement"],
+    tags=["crediscore", "modele", "reentrainement"],
 )
 def reentrainement():
     def executer(nom: str, script: str, description: str) -> BashOperator:

@@ -72,7 +72,7 @@ parametres = {
     # Un seul passage a la fois. Deux executions concurrentes ecriraient au meme
     # endroit et se marcheraient dessus.
     max_active_runs=1,
-    tags=["crediscore", "bloc-3", "variables"],
+    tags=["crediscore", "pipeline", "variables"],
 )
 def construction_variables():
     def lancer(nom: str, description: str) -> BashOperator:

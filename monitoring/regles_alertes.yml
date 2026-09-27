@@ -1,4 +1,4 @@
-# Alertes proactives — exigées par les Blocs 2 (infrastructure) et 3 (pipeline).
+# Alertes proactives sur l'infrastructure et sur le pipeline de données.
 #
 # Chaque règle porte un seuil justifié, et chaque expression a été VÉRIFIÉE
 # contre les métriques réellement exposées (audit du 24/08/2026). Deux règles
@@ -25,7 +25,7 @@ groups:
         for: 5m
         labels:
           severite: critique
-          bloc: "2"
+          domaine: infrastructure
         annotations:
           resume: "Moins de 15 % d'espace disque libre sur la VM de traitement"
           action: "Purger les logs Airflow et les images Docker inutilisées (docker image prune)"
@@ -38,7 +38,7 @@ groups:
         for: 10m
         labels:
           severite: avertissement
-          bloc: "2"
+          domaine: infrastructure
         annotations:
           resume: "Mémoire de la VM au-dessus de 90 % depuis 10 minutes"
           action: "Réduire la parallélisation Spark ou augmenter type_instance"
@@ -50,7 +50,7 @@ groups:
         for: 3m
         labels:
           severite: critique
-          bloc: "2"
+          domaine: infrastructure
         annotations:
           resume: "Moins de 9 conteneurs en fonctionnement dans la pile"
           action: "docker compose ps puis docker compose up -d"
@@ -65,7 +65,7 @@ groups:
         for: 5m
         labels:
           severite: critique
-          bloc: "3"
+          domaine: pipeline
         annotations:
           resume: "L'ordonnanceur Airflow ne bat plus depuis 5 minutes"
           action: "docker compose logs airflow-scheduler"
@@ -78,7 +78,7 @@ groups:
         for: 2m
         labels:
           severite: avertissement
-          bloc: "3"
+          domaine: pipeline
         annotations:
           resume: "Au moins un DAG ne peut pas être chargé par Airflow"
           action: "Consulter les erreurs d'import dans l'interface Airflow"
@@ -89,13 +89,13 @@ groups:
         #
         # NOTE : ce compteur StatsD n'existe qu'à partir du premier échec réel.
         # La règle est donc latente tant qu'aucune tâche n'a échoué — ce n'est
-        # pas un défaut, mais elle ne pourra être vérifiée qu'au Bloc 3, en
-        # provoquant délibérément un échec (ce sera filmé pour la vidéo 2).
+        # pas un défaut. Sa vérification demande de provoquer délibérément un
+        # échec de tâche.
         expr: increase(airflow_ti_failures[15m]) > 0
         for: 1m
         labels:
           severite: critique
-          bloc: "3"
+          domaine: pipeline
         annotations:
           resume: "Au moins une tâche Airflow a échoué dans les 15 dernières minutes"
           action: "Ouvrir le DAG concerné, onglet Graph, consulter le journal de la tâche"

@@ -5,26 +5,26 @@
 ## D-101 — 27/07/2026 — Démonstrateur à l'échelle, IaC dimensionnée par variables
 
 - **Contexte :** l'architecture cible (cluster Spark 3 nœuds, PostgreSQL managé,
-  K8s multi-pods) dépasse le budget et le délai d'un projet de certification de
-  20 jours.
+  K8s multi-pods) dépasse le budget et le délai impartis au projet.
 - **Options :** tout déployer à l'échelle cible ; tout simuler en local ;
   démonstrateur cloud réduit avec IaC paramétrée.
 - **Choix :** démonstrateur cloud réel à échelle réduite — mêmes briques
   logicielles (Airflow, Spark, PostgreSQL, Prometheus/Grafana, K8s), ressources
   minimales, dimensionnement exposé en variables Terraform.
 - **Raison :** un architecte dimensionne l'infrastructure au besoin et au coût ;
-  tout ce qui est démontré en vidéo tourne réellement ; le passage à l'échelle
-  cible est un changement de variables, pas de code.
+  tout ce qui est présenté tourne réellement ; le passage à l'échelle cible est
+  un changement de variables, pas de code.
 
-## D-102 — 27/07/2026 — Les livrables code des Blocs 2 et 3 vivent dans ce dépôt
+## D-102 — 27/07/2026 — Infrastructure et pipelines dans le dépôt d'industrialisation
 
-- **Contexte :** le référentiel exige du code IaC (Bloc 2) et du code de pipeline
-  (Bloc 3) sur GitHub, plus deux dépôts distincts pour le Bloc 4.
-- **Choix :** `infra/` (Bloc 2) et `pipelines/` (Bloc 3) dans ce dépôt n°2, aux
-  côtés du CI/CD ; le dépôt n°1 reste dédié à la solution IA.
+- **Contexte :** le projet comporte du code d'infrastructure, du code de pipeline
+  et une solution d'IA, à répartir entre dépôts.
+- **Choix :** `infra/` et `pipelines/` dans ce dépôt, aux côtés de la CI/CD ; le
+  dépôt `crediscore-ml` reste dédié à la solution IA.
 - **Raison :** infrastructure, pipeline et déploiement partagent le même cycle de
-  vie opérationnel ; deux dépôts au total restent simples à présenter,
-  chaque bloc pointant vers un dossier précis.
+  vie opérationnel, alors que le modèle suit celui des données et des
+  réentraînements. Deux dépôts suffisent, chaque responsabilité ayant son
+  dossier.
 
 ## D-103 — 28/07/2026 — Environnement virtuel dédié, et conteneurs pour Airflow/Spark
 
@@ -59,7 +59,7 @@
   donc testable. Une compromission du conteneur de l'API ne donne accès ni aux
   données brutes ni à la suppression.
 - **Suite :** GitHub Actions s'authentifiera par fédération OIDC, sans clé
-  stockée dans les secrets du dépôt (Bloc 4). Procédure : `docs/connexion-aws.md`.
+  stockée dans les secrets du dépôt. Procédure : `docs/connexion-aws.md`.
 
 ## D-105 — 19/08/2026 — Un `apply` interrompu à mi-parcours devient un test
 
@@ -131,11 +131,11 @@
 - **Raison :** une instance arrêtée ne facture plus d'heures de calcul ; seul le
   disque subsiste, pour quelques centimes par jour. En face, la destruction
   imposait une demi-heure de remise en route chaque matin — dont une dizaine de
-  minutes rien que pour reconstruire l'image Airflow (Java + PySpark). À
-  quatorze jours de l'échéance, l'arbitrage n'a rien d'ambigu.
-- **Ce qui n'est pas perdu :** la reproductibilité intégrale reste démontrable,
-  et sera filmée une fois pour la vidéo du Bloc 2 — `terraform destroy` puis
-  `terraform apply` reconstruit l'ensemble à partir du seul code.
+  minutes rien que pour reconstruire l'image Airflow (Java + PySpark).
+  L'arbitrage n'a rien d'ambigu.
+- **Ce qui n'est pas perdu :** la reproductibilité intégrale reste vérifiable —
+  `terraform destroy` puis `terraform apply` reconstruit l'ensemble à partir du
+  seul code.
 - **Effet de bord assumé :** l'adresse IP publique change à chaque redémarrage.
   Relire `terraform output` le matin.
 
@@ -203,8 +203,7 @@
   puis les trois minutes du `for:`. Acceptable pour ce projet, et documenté
   plutôt que découvert en revue.
 - **Reste ouvert :** les alertes sont évaluées et visibles dans Grafana, mais
-  pas encore routées vers un canal (courriel ou webhook). À traiter avant la
-  vidéo du Bloc 3.
+  pas encore routées vers un canal (courriel ou webhook).
 
 ## D-111 — 24/08/2026 — Une alerte vérifiée par déclenchement réel
 
@@ -235,7 +234,7 @@
   PySpark 3.5.3 déclare 3.8 à 3.11. Les workers Python plantaient sur
   `WinError 10038`. **Conséquence majeure : l'image Airflow était en
   `python3.12`, elle aussi hors plage.** Les jobs auraient probablement échoué
-  dans le conteneur, sur la VM, en pleine journée de Bloc 3. Venv et image
+  dans le conteneur, sur la VM, au premier lancement du pipeline. Venv et image
   alignés sur **3.11**.
 - **Obstacle 2 — l'interpréteur des workers.** Spark lance ses processus Python
   avec le `python` du `PATH`, qui n'est pas celui du venv — ici celui du

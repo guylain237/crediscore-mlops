@@ -73,7 +73,7 @@ parametres = {
     catchup=False,
     default_args=parametres,
     max_active_runs=1,
-    tags=["crediscore", "bloc-4", "derive", "C-10"],
+    tags=["crediscore", "modele", "derive", "C-10"],
 )
 def surveillance_derive():
     @task

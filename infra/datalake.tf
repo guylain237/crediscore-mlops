@@ -1,8 +1,8 @@
 ###############################################################################
 # datalake.tf — le data lake, décrit par le code
 #
-# C'est le livrable du Bloc 2. Les mêmes réglages qu'à l'étape 6 de
-# docs/connexion-aws.md, mais exprimés en code : relisibles, versionnés,
+# Les mêmes réglages qu'à l'étape 6 de docs/connexion-aws.md, mais exprimés
+# en code : relisibles, versionnés,
 # rejouables à l'identique, et auditables ligne par ligne.
 #
 # Rappel structurant : S3 n'a pas de dossiers. Les zones raw/, clean/ et
@@ -91,9 +91,9 @@ resource "aws_s3_bucket" "datalake" {
   bucket = local.nom_datalake
 
   # false = `terraform destroy` ÉCHOUE si le bucket contient encore des
-  # objets. C'est un garde-fou souhaité : tes 2,5 Go de données brutes ne
-  # peuvent pas disparaître par une commande tapée trop vite. Pour vraiment
-  # supprimer, il faut vider le bucket sciemment — donc y penser.
+  # objets. C'est un garde-fou souhaité : les 2,5 Go de données brutes ne
+  # peuvent pas disparaître par une commande tapée trop vite. Une suppression
+  # réelle impose de vider le bucket sciemment.
   force_destroy = false
 }
 
@@ -109,7 +109,7 @@ resource "aws_s3_bucket_versioning" "datalake" {
 }
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Chiffrement au repos — exigence du Bloc 2
+# Chiffrement au repos — obligatoire sur toutes les zones
 # ─────────────────────────────────────────────────────────────────────────────
 resource "aws_s3_bucket_server_side_encryption_configuration" "datalake" {
   bucket = aws_s3_bucket.datalake.id

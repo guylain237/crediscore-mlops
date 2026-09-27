@@ -5,8 +5,7 @@
 # cluster à l'échelle cible — seul le placement changerait, pas le code.
 #
 # Aucun identifiant AWS n'apparaît ici : les conteneurs empruntent le rôle IAM
-# de l'instance (contrôle C-9). C'est ce qui permet d'écrire « secrets gérés »
-# dans les livrables sans mentir.
+# de l'instance (contrôle C-9). Aucun secret durable ne circule dans la pile.
 #
 # Démarrage :  docker compose --env-file .env up -d
 # Arrêt     :  docker compose down            (les volumes survivent)
@@ -23,7 +22,7 @@ x-airflow-commun: &airflow-commun
     AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: "true"
     AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://${POSTGRES_UTILISATEUR}:${POSTGRES_MOT_DE_PASSE}@postgres:5432/airflow
     AIRFLOW__WEBSERVER__EXPOSE_CONFIG: "false"
-    # Métriques exposées à Prometheus (supervision du pipeline, Bloc 3)
+    # Métriques exposées à Prometheus (supervision du pipeline)
     AIRFLOW__METRICS__STATSD_ON: "true"
     AIRFLOW__METRICS__STATSD_HOST: statsd-exporter
     AIRFLOW__METRICS__STATSD_PORT: "9125"
@@ -162,7 +161,7 @@ services:
       - prometheus
     restart: unless-stopped
 
-  # Métriques de la VM (CPU, RAM, disque) — surveillance d'infrastructure Bloc 2
+  # Métriques de la VM (CPU, RAM, disque) — surveillance d'infrastructure
   node-exporter:
     image: prom/node-exporter:v1.8.2
     command:
@@ -203,8 +202,8 @@ services:
   #
   # Le CODE vient du dépôt crediscore-ml : c'est la solution d'IA, elle vit
   # avec le modèle qu'elle sert. Ce dépôt-ci décrit COMMENT elle tourne. La
-  # séparation est celle du Bloc 4 : la solution d'un côté, son
-  # industrialisation de l'autre.
+  # séparation est nette : la solution d'un côté, son industrialisation de
+  # l'autre.
   #
   # Le modèle n'est pas dans l'image. Il est monté en lecture seule, et en
   # production il viendrait du registre MLflow : figer un modèle dans une
@@ -228,7 +227,7 @@ services:
       # Sans cette ligne l'API cherchait /donnees_pipeline sur la VM, où ce
       # dossier est vide : elle redémarrait en boucle sur un FileNotFoundError.
       # Le pipeline écrit dans curated/, l'API y lit — c'est ce qui relie
-      # vraiment le Bloc 3 au Bloc 4.
+      # vraiment le pipeline de données à la solution servie.
       CREDISCORE_SOCLE: s3://${CREDISCORE_BUCKET}/curated/socle_complet
     volumes:
       - ../../crediscore-ml/models:/app/models:ro

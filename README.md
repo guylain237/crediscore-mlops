@@ -1,13 +1,11 @@
 # CrediScore — MLOps : infrastructure, pipelines et CI/CD
 
-**Projet de certification — Architecte en IA (Mastère 2)**
 **Auteur :** Tagne Guylain Florian
 
-Ce dépôt est le **dépôt n°2** exigé par le Bloc 4 (déploiement CI/CD), et héberge
-aussi les livrables code des **Blocs 2** (infrastructure as code) et **3**
-(pipelines de données).
+Ce dépôt porte l'**industrialisation** du système de scoring : infrastructure as
+code, pipelines de données, déploiement continu et supervision.
 
-> Le dépôt n°1 — développement de la solution IA — est ici :
+> Le développement de la solution IA elle-même est dans le dépôt complémentaire :
 > [crediscore-ml](https://github.com/guylain237/crediscore-ml)
 
 ## Architecture
@@ -35,8 +33,8 @@ Sources CSV ──► Ingestion (Airflow) ──► Data lake S3 (raw / clean / 
 ## Structure du dépôt
 
 ```
-├── infra/              # Bloc 2 — Terraform : réseau, S3, VM, IAM, chiffrement
-├── pipelines/          # Bloc 3 — DAGs Airflow + jobs PySpark
+├── infra/              # Terraform : réseau, S3, VM, IAM, chiffrement
+├── pipelines/          # DAGs Airflow + jobs PySpark
 │   ├── dags/
 │   └── spark_jobs/
 ├── api/                # API de scoring FastAPI (score + SHAP + audit log)

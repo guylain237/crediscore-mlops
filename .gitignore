@@ -70,8 +70,6 @@ Thumbs.db
 MEMO-PERSO.md
 *.perso.md
 
-# Scripts de démonstration : notes de préparation orale, strictement privées.
-# Elles ne font pas partie des livrables et ne doivent jamais être publiées.
-*script-video*
-*video-bloc*
+# Notes de travail et supports de présentation, strictement privés : ils ne
+# font pas partie du dépôt et ne doivent jamais être publiés.
 PERSO-*
