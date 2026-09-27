@@ -85,6 +85,38 @@ Le dossier `.venv/` n'est **jamais** versionné (lourd, propre à la machine,
 régénérable) ; les deux fichiers de dépendances le sont **toujours** — ce sont
 eux qui permettent de le reconstruire à l'identique.
 
+## Configuration
+
+Aucun secret ne vit dans le dépôt. La configuration passe par trois fichiers
+locaux, chacun accompagné d'un gabarit versionné qui documente ce qu'il faut
+fournir :
+
+| Fichier local | Gabarit versionné | Contenu |
+|---|---|---|
+| `docker/.env` | [`docker/.env.example`](docker/.env.example) | mots de passe des interfaces, nom du bucket, sel de pseudonymisation |
+| `infra/terraform.tfvars` | `infra/terraform.tfvars.example` | IP administrateur, dimensionnement de la VM |
+| `infra/backend.hcl` | `infra/backend.hcl.example` | bucket d'état Terraform (contient le n° de compte) |
+
+Les trois sont exclus par [`.gitignore`](.gitignore). **Aucun identifiant AWS n'y
+figure** : le poste s'authentifie par le profil SSO `crediscore`, la VM et l'API
+par leur rôle IAM respectif (`infra/iam.tf`), et la CI par fédération OIDC. Le
+même code fonctionne dans les trois cas — voir
+[`docs/connexion-aws.md`](docs/connexion-aws.md) §7.
+
+Démarrage de la pile, depuis `docker/` :
+
+```bash
+cp .env.example .env        # puis renseigner les valeurs
+docker compose --env-file .env up -d
+```
+
+Le détail de chaque variable, de qui la lit et de ce qui se passe en son absence
+est dans [`docs/connexion-aws.md`](docs/connexion-aws.md) §7.1. La cohérence
+entre le gabarit, `docker-compose.yml` et le code est vérifiée à chaque `push`
+par `tests/test_variables_environnement.py` : une variable proposée à
+l'opérateur sans effet réel, ou attendue par la pile mais absente du gabarit,
+fait échouer la CI.
+
 ## Conformité
 
 - Chiffrement au repos (SSE/KMS) et en transit (TLS), IAM par rôles, secrets gérés.

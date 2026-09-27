@@ -248,120 +248,90 @@ Terraform.
 
 ## Étape 7 — Connecter l'application (moindre privilège)
 
-Tout ce qui suit s'écrit dès maintenant : le code n'a pas besoin que le bucket
-existe pour être rédigé. Seules deux choses attendent l'étape 8 — la valeur de
-`DATALAKE_BUCKET` dans le `.env`, qui sortira de `terraform output`, et le test
-d'intégration 7.4, qui ne passera qu'une fois le bucket créé.
+Le principe posé en tête de document se concrétise ici : **aucun composant ne
+reçoit d'identifiant AWS**. Chacun lit des *noms* dans son environnement, et
+laisse le SDK résoudre les identifiants selon l'endroit où il tourne.
 
-### 7.1 Ajouter le SDK aux dépendances
+### 7.1 Les variables que le code lit réellement
 
-Dans [`requirements.txt`](../requirements.txt), sous une rubrique « Accès au data lake » :
+Aucune n'est un secret : ce sont des noms de bucket, des adresses et des
+réglages. Chaque lecture porte une valeur de repli, ce qui permet au même code
+de tourner sur un poste sans AWS.
 
-```
-boto3>=1.35
-```
+| Variable | Lue par | Sans elle |
+|---|---|---|
+| `CREDISCORE_BUCKET` | `pipelines/spark_jobs/commun.py`, `pipelines/dags/dag_ingestion_quotidienne.py` | le pipeline travaille sur les dossiers locaux de `donnees_pipeline/` |
+| `CREDISCORE_SOCLE` | `crediscore-ml/src/models/preparation.py` | le modèle lit le socle local au lieu de `curated/` |
+| `CREDISCORE_SEL_PSEUDO` | `pipelines/spark_jobs/pseudonyme.py`, `crediscore-ml/api/journal.py` | un sel de développement s'applique, inutilisable en production (contrôle C-7) |
+| `CREDISCORE_MEMOIRE_GO` | les huit jobs d'agrégation | 4 Go par job, au risque d'un job tué par le noyau |
+| `CREDISCORE_ECHANTILLON` | les huit jobs d'agrégation | traitement intégral, sans échantillonnage |
+| `DATABASE_URL` | `crediscore-ml/api/journal.py` | le journal des décisions part dans un fichier JSONL local — acceptable en développement, pas en production (contrôle C-2) |
+| `MLFLOW_TRACKING_URI` | `crediscore-ml/src/models/entrainer.py` | suivi d'expériences dans un SQLite local |
 
-puis, **venv du dépôt activé** (prompt `(.venv)`, décision D-103) :
+La liste complète de ce que la pile attend, avec les mots de passe des
+interfaces, est dans [`docker/.env.example`](../docker/.env.example). Le `.env`
+réel se remplit **sur la VM** et n'est jamais versionné.
+
+> Ces trois sources — le gabarit, `docker-compose.yml` et le code — sont
+> maintenues cohérentes par `tests/test_variables_environnement.py` : une
+> variable proposée à l'opérateur mais que personne ne consomme, ou attendue par
+> la pile mais absente du gabarit, fait échouer la CI.
+
+### 7.2 Pourquoi aucun code n'instancie de client S3
+
+Le projet n'écrit jamais `boto3.client("s3", aws_access_key_id=…)`. Il n'écrit
+même pas de client du tout : les accès passent par les bibliothèques qui savent
+déjà lire une URL S3.
+
+- Les jobs Spark écrivent des chemins `s3a://…` — le connecteur `hadoop-aws`
+  de l'image Airflow résout les identifiants par la chaîne standard.
+- Le modèle et l'API lisent le socle avec `pandas` via `pyarrow` et `s3fs`, à
+  partir de la seule valeur de `CREDISCORE_SOCLE`.
+
+Conséquence : passer du poste à la VM ne change **pas une ligne**. En local, les
+identifiants viennent du profil `crediscore` ; sur la VM, du rôle IAM de
+l'instance ; en CI, d'un rôle assumé par OIDC.
+
+### 7.3 Le rôle de l'application, restreint par zone
+
+Le moindre privilège est décrit en Terraform, pas dans la console :
+[`infra/iam.tf`](../infra/iam.tf), ressource `aws_iam_role.api_scoring`.
+
+Les droits ne sont pas écrits à la main zone par zone : ils sont **dérivés du
+contrat des zones** déclaré dans [`infra/datalake.tf`](../infra/datalake.tf), où
+chaque zone porte ce que la VM et l'API peuvent en faire. Ajouter une zone au
+contrat met donc les deux politiques à jour, sans risque d'oubli.
+
+Ce que cela donne pour l'API :
+
+| Zone | Droit de l'API | Pourquoi |
+|---|---|---|
+| `curated/` | lecture | les variables prêtes à l'emploi, la seule chose qu'elle a besoin de lire |
+| `audit/` | **écriture seule** | un journal doit pouvoir être écrit, jamais relu ni effacé par celui qui l'écrit — c'est la condition pour qu'il fasse foi (P-7, AI Act art. 12) |
+| `raw/`, `clean/`, `reference/`, `mlflow/` | aucun | une compromission du conteneur ne donne pas accès aux données brutes ni aux artefacts |
+
+La session du rôle est limitée à une heure (`max_session_duration`) : un
+identifiant temporaire compromis expire vite.
+
+### 7.4 Vérifier que la chaîne fonctionne
+
+Il n'y a pas de test d'intégration AWS dans la CI, et c'est délibéré : elle n'a
+pas d'identifiants, et un test qui se contente d'être ignoré ne prouve rien. La
+vérification se fait à la main, au moment où le bucket existe (étape 8) :
 
 ```powershell
-python -m pip install -r requirements.txt
+$bucket = (terraform output -raw datalake_bucket)
+
+# Les identifiants sont-ils résolus, et le bucket joignable ?
+aws s3 ls "s3://$bucket/"
+
+# La zone que l'API lit contient-elle le socle attendu ?
+aws s3 ls "s3://$bucket/curated/" --recursive --human-readable
 ```
 
-### 7.2 Le code ne connaît que des noms, jamais des secrets
-
-Configuration lue depuis l'environnement, avec `pydantic` déjà présent au projet :
-
-```python
-# api/config.py
-from pydantic_settings import BaseSettings
-
-class Reglages(BaseSettings):
-    aws_region: str = "eu-north-1"
-    datalake_bucket: str            # obligatoire : aucune valeur par défaut
-    prefixe_curated: str = "curated/"
-
-reglages = Reglages()
-```
-
-```python
-# api/datalake.py
-import boto3
-from .config import reglages
-
-def client_s3():
-    """Aucun identifiant en argument : boto3 résout la chaîne de credentials.
-
-    Sur le poste → profil `crediscore` ; en production → rôle IAM du pod.
-    Le code est le même, et c'est tout l'intérêt.
-    """
-    return boto3.client("s3", region_name=reglages.aws_region)
-```
-
-Fichier `.env` **local** (déjà ignoré par git) :
-
-```
-DATALAKE_BUCKET=crediscore-datalake-123456789012
-AWS_REGION=eu-north-1
-```
-
-Un `.env.example` versionné, avec les mêmes clés et des valeurs vides, documente
-ce qu'il faut fournir sans divulguer le numéro de compte.
-
-### 7.3 Le rôle de l'application, restreint à deux préfixes
-
-Ici s'applique le moindre privilège. Politique IAM à attacher au rôle porté par
-l'API en production (`crediscore-api-role`) :
-
-```json
-{
-  "Version": "2012-10-17",
-  "Statement": [
-    {
-      "Sid": "LireLesDonneesExploitables",
-      "Effect": "Allow",
-      "Action": ["s3:GetObject", "s3:ListBucket"],
-      "Resource": [
-        "arn:aws:s3:::crediscore-datalake-123456789012",
-        "arn:aws:s3:::crediscore-datalake-123456789012/curated/*"
-      ]
-    },
-    {
-      "Sid": "EcrireLesJournauxDAudit",
-      "Effect": "Allow",
-      "Action": ["s3:PutObject"],
-      "Resource": "arn:aws:s3:::crediscore-datalake-123456789012/audit/*"
-    }
-  ]
-}
-```
-
-L'API de scoring ne lit que `curated/` et n'écrit que ses journaux d'audit : elle
-ne peut ni toucher aux données brutes, ni supprimer quoi que ce soit. Une
-compromission du conteneur ne donne pas le data lake.
-
-Cette politique et ce rôle sont écrits en Terraform dans `infra/` : la console
-sert à comprendre, l'IaC est la source de vérité auditable (décision D-102).
-
-### 7.4 Vérification automatisée, dans la convention du dépôt
-
-```python
-# tests/test_aws_connexion.py
-import os
-import pytest
-
-pytestmark = pytest.mark.skipif(
-    not os.getenv("DATALAKE_BUCKET"),
-    reason="Test d'intégration : nécessite un profil AWS et DATALAKE_BUCKET.",
-)
-
-def test_le_bucket_du_datalake_est_accessible() -> None:
-    import boto3
-    s3 = boto3.client("s3", region_name=os.getenv("AWS_REGION", "eu-north-1"))
-    s3.head_bucket(Bucket=os.environ["DATALAKE_BUCKET"])
-```
-
-Le `skipif` est important : la CI publique n'a pas d'identifiants AWS, et un test
-d'intégration ne doit jamais faire échouer un pipeline pour cette raison.
+Ce que la CI vérifie, en revanche, à chaque `push` : que le gabarit, la pile et
+le code s'accordent sur les mêmes variables (§7.1), et que les contrôles qualité
+du pipeline se comportent comme spécifié.
 
 ## Étape 8 — Terraform : l'infrastructure décrite par le code
 

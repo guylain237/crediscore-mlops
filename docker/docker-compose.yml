@@ -30,6 +30,10 @@ x-airflow-commun: &airflow-commun
     CREDISCORE_BUCKET: ${CREDISCORE_BUCKET}
     CREDISCORE_DSN: postgresql://${POSTGRES_UTILISATEUR}:${POSTGRES_MOT_DE_PASSE}@postgres:5432/crediscore
     MLFLOW_TRACKING_URI: http://mlflow:5000
+    # Mémoire des jobs Spark. Sans cette ligne, les jobs lus par le DAG
+    # retombent sur leur valeur par défaut et le réglage du .env reste sans
+    # effet — c'est le test tests/test_variables_environnement.py qui le garde.
+    CREDISCORE_MEMOIRE_GO: ${CREDISCORE_MEMOIRE_GO}
     AWS_DEFAULT_REGION: ${AWS_REGION}
   volumes:
     - ../pipelines/dags:/opt/airflow/dags:ro

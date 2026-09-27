@@ -127,15 +127,14 @@ jobs:
             --env-file docker/.env.example config > /dev/null
           echo "Pile cohérente."
 
-      - name: "Aucun secret en clair dans la pile"
-        # Le fichier d'exemple ne doit contenir que des valeurs à remplir. Si
-        # un mot de passe réel y atterrit un jour, il part sur GitHub et il est
-        # public pour toujours — le retirer d'un commit ultérieur ne le retire
-        # pas de l'historique.
-        run: |
-          if grep -nP '=(?!a-remplir)' docker/.env.example \
-             | grep -vE '=(a-remplir|admin|eu-north-1|crediscore)' ; then
-            echo "ECHEC : une valeur qui ressemble à un secret réel figure dans .env.example"
-            exit 1
-          fi
-          echo "Aucune valeur réelle dans le fichier d'exemple."
+      # Le contrôle « aucun secret réel dans .env.example » vit désormais dans
+      # tests/test_variables_environnement.py, exécuté par le job Python.
+      #
+      # Il était écrit ici en shell, avec une liste blanche des valeurs
+      # tolérées (`admin`, `eu-north-1`, `crediscore`). Toute variable de
+      # réglage ajoutée au gabarit tombait donc hors liste et faisait échouer
+      # la CI : c'est arrivé avec CREDISCORE_MEMOIRE_GO=3, un paramètre de
+      # dimensionnement qui n'est pas un secret. Le contrôle porte maintenant
+      # sur le NOM des clés (MOT_DE_PASSE, SEL_, TOKEN…), ce qui ne demande
+      # aucune liste à tenir à jour, et il est vérifiable en local par
+      # `pytest` avant de pousser.
